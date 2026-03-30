@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Auto Git Commit",
+  "description": "每次 agent 执行完成后，自动将所有变更提交到本地 git",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "git add -A && git diff --cached --quiet || git commit -m \"auto: update from conversation\""
+  }
+}
