@@ -49,14 +49,7 @@ export function AIChatPanel() {
     <div className="h-full flex flex-col bg-white">
       <div className="px-4 py-2.5 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50"><div className="flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-blue-400 flex items-center justify-center text-white text-sm">AI</div><div><div className="font-medium text-gray-900">子言助手</div><div className="text-xs text-gray-500">在线</div></div></div></div>
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4"><AnimatePresence>{msgs.map(m=>(
-        <motion.div key={m.id} initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.3}} className={`flex ${m.type==='user'?'justify-end':'justify-start'}`}><div className={`max-w-[85%] ${m.type==='user'?'order-2':''}`}><div className="flex items-start gap-2">
-          {m.type==='ai'&&<div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-400 to-blue-400 flex items-center justify-center text-white text-xs flex-shrink-0">AI</div>}
-          <div className="flex-1"><div className={`rounded-2xl px-4 py-2.5 ${m.type==='user'?'bg-blue-500 text-white':'bg-gray-100 text-gray-900'}`}>
-            {m.tool&&<div className="mb-1.5 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full inline-block">{m.tool}</div>}
-            <div className="whitespace-pre-wrap text-sm leading-relaxed"><TW text={m.content} isAI={m.type==='ai'}/></div>
-            {m.image&&<img src={m.image} alt="PPT" className="mt-3 rounded-lg w-full object-cover max-h-48"/>}</div>
-            {m.buttons&&<div className="flex gap-2 mt-2">{m.buttons.map((b,i)=><button key={i} onClick={()=>onBtn(b.action)} className="px-4 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors">{b.label}</button>)}</div>}
-          </div></div><div className="text-xs text-gray-400 mt-1 px-2">{m.timestamp.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</div></div></motion.div>
+        <MsgBubble key={m.id} m={m} onBtn={onBtn} />
       ))}</AnimatePresence><div ref={endRef}/></div>
       <div className="px-4 py-2 border-t border-gray-200 bg-gray-50 relative"><div className="flex gap-2 items-center justify-between"><div className="flex gap-2">
         <button onClick={()=>fileRef.current?.click()} className="p-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors" title="上传文件"><Paperclip className="w-4 h-4"/></button>
@@ -79,5 +72,18 @@ export function AIChatPanel() {
       <input ref={fileRef} type="file" onChange={e=>{const f=e.target.files?.[0];if(f){add({type:'user',content:`已上传文件：${f.name}`});setTimeout(()=>add({type:'ai',content:'我已收到您上传的文件，正在分析内容。请稍等片刻...'}),500);}}} className="hidden" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"/>
     </div>);
 }
-function TW({text,isAI}:{text:string;isAI:boolean}){const[s,setS]=useState('');const[d,setD]=useState(!isAI);const r=useRef(false);useEffect(()=>{if(!isAI||r.current){setS(text);setD(true);return;}r.current=true;setS('');setD(false);let i=0;const iv=setInterval(()=>{if(i<text.length){setS(text.slice(0,i+1));i++;}else{setD(true);clearInterval(iv);}},30);return()=>clearInterval(iv);},[text,isAI]);return<>{s}{!d&&isAI&&<span className="inline-block w-1 h-4 bg-gray-400 ml-0.5 animate-pulse"/>}</>;}
+function MsgBubble({m,onBtn}:{m:Message;onBtn:(a:string)=>void}){
+  const [showBtns,setShowBtns]=useState(m.type==="user");
+  return(
+    <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.3}} className={`flex ${m.type==="user"?"justify-end":"justify-start"}`}><div className={`max-w-[85%] ${m.type==="user"?"order-2":""}`}><div className="flex items-start gap-2">
+      {m.type==="ai"&&<div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-400 to-blue-400 flex items-center justify-center text-white text-xs flex-shrink-0">AI</div>}
+      <div className="flex-1"><div className={`rounded-2xl px-4 py-2.5 ${m.type==="user"?"bg-blue-500 text-white":"bg-gray-100 text-gray-900"}`}>
+        {m.tool&&<div className="mb-1.5 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full inline-block">{m.tool}</div>}
+        <div className="whitespace-pre-wrap text-sm leading-relaxed"><TW text={m.content} isAI={m.type==="ai"} onComplete={()=>setShowBtns(true)}/></div>
+        {m.image&&<img src={m.image} alt="PPT" className="mt-3 rounded-lg w-full object-cover max-h-48"/>}</div>
+        {showBtns&&m.buttons&&<div className="flex gap-2 mt-2">{m.buttons.map((b,i)=><button key={i} onClick={()=>onBtn(b.action)} className="px-4 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors">{b.label}</button>)}</div>}
+      </div></div><div className="text-xs text-gray-400 mt-1 px-2">{m.timestamp.toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"})}</div></div></motion.div>
+  );
+}
+function TW({text,isAI,onComplete}:{text:string;isAI:boolean;onComplete?:()=>void}){const[s,setS]=useState('');const[d,setD]=useState(!isAI);const r=useRef(false);useEffect(()=>{if(!isAI||r.current){setS(text);setD(true);onComplete?.();return;}r.current=true;setS('');setD(false);let i=0;const iv=setInterval(()=>{if(i<text.length){setS(text.slice(0,i+1));i++;}else{setD(true);clearInterval(iv);onComplete?.();}},30);return()=>clearInterval(iv);},[text,isAI]);return<>{s}{!d&&isAI&&<span className="inline-block w-1 h-4 bg-gray-400 ml-0.5 animate-pulse"/>}</>;}
 function HIn({value,onChange,onEnter}:{value:string;onChange:(v:string)=>void;onEnter:()=>void}){const ref=useRef<HTMLDivElement>(null);const[f,setF]=useState(true);useEffect(()=>{if(ref.current&&f){ref.current.focus();const r=document.createRange();const s=window.getSelection();if(ref.current.childNodes.length>0){r.selectNodeContents(ref.current);r.collapse(false);s?.removeAllRanges();s?.addRange(r);}setF(false);}},[f]);let b=false;const n=value.split(/([「」])/).flatMap((p,i)=>{if(p==='「'){b=true;return[];}if(p==='」'){b=false;return[];}if(!p)return[];return[b?<span key={i} className="text-blue-600 font-medium">{p}</span>:<span key={i}>{p}</span>];});return<div ref={ref} contentEditable onInput={e=>onChange((e.target as HTMLDivElement).textContent||'')} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();onEnter();}}} suppressContentEditableWarning className="w-full min-h-[40px] max-h-20 overflow-y-auto px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm" style={{wordBreak:'break-word'}}>{n}</div>;}
