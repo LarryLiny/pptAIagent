@@ -15,7 +15,7 @@ const TOOL_SETTINGS: Record<string, SettingItem[]> = {
   ],
   '搜索背景知识': [
     { key: 'sourceType', label: '资料来源', options: ['外研社素材库', '全网搜索', '学术资源'] },
-    { key: 'difficulty', label: '内容难度', options: ['初中水平', '高中水平', '大学水平'] },
+    { key: 'difficulty', label: '内容难度', options: ['简单', '中等', '拔高'] },
   ],
   '例题生成': [
     { key: 'qtype', label: '题型', options: ['选择题', '填空题', '判断题', '简答题'] },
