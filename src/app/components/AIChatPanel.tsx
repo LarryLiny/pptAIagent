@@ -15,7 +15,7 @@ const TOOL_SETTINGS: Record<string, SettingItem[]> = {
   ],
   '搜索背景知识': [
     { key: 'sourceType', label: '资料来源', options: ['外研社素材库', '全网搜索', '学术资源'] },
-    { key: 'difficulty', label: '内容难度', options: ['初中水平', '高中水平', '大学水平'] },
+    { key: 'difficulty', label: '内容难度', options: ['简单', '一般', '进阶'] },
   ],
   '例题生成': [
     { key: 'qtype', label: '题型', options: ['选择题', '填空题', '判断题', '简答题'] },
@@ -336,7 +336,7 @@ function TW({ text, isAI, onComplete }: { text: string; isAI: boolean; onComplet
   useEffect(() => {
     if (!isAI || r.current) { setS(text); setD(true); onComplete?.(); return; }
     r.current = true; setS(''); setD(false); let i = 0;
-    const iv = setInterval(() => { if (i < text.length) { setS(text.slice(0, i + 1)); i++; } else { setD(true); clearInterval(iv); onComplete?.(); } }, 30);
+    const iv = setInterval(() => { if (i < text.length) { setS(text.slice(0, i + 1)); i++; } else { setD(true); clearInterval(iv); onComplete?.(); } }, 10);
     return () => clearInterval(iv);
   }, [text, isAI]);
   return <>{s}{!d && isAI && <span className="inline-block w-1 h-4 bg-gray-400 ml-0.5 animate-pulse" />}</>;
