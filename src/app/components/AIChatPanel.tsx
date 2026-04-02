@@ -84,11 +84,12 @@ export function AIChatPanel() {
   }, []);
 
   const selectTool = (t: string) => {
-    setTool(t); setToolMenu(false); setShowSettings(false);
+    setTool(t); setToolMenu(false); setShowSettings(true);
     // Init default settings (first option of each)
     const defs: Record<string, string> = {};
     TOOL_SETTINGS[t]?.forEach(s => { defs[s.key] = s.options[0]; });
     setSettings(defs);
+    setInp(TOOL_PLACEHOLDER[t] || "");
   };
   const clearTool = () => { setTool(null); setShowSettings(false); setSettings({}); };
   const updateSetting = (key: string, val: string) => setSettings(prev => ({ ...prev, [key]: val }));
