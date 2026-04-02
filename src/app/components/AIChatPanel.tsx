@@ -73,7 +73,7 @@ export function AIChatPanel() {
     setMsgs(p => [...p, { id: (Date.now() + Math.random()).toString(), timestamp: new Date(), ...m } as Message]);
 
   useEffect(() => {
-    const t = setTimeout(() => add({ type: 'ai', content: '老师您好，我是子言，我可以帮您 /n 「搜索优质素材」 /n 「修改课件内容」 /n 「设计课堂活动」等，有什么需要帮忙的，直接告诉我即可。\n\n例如跟我说：请结合近期时事和本节课的内容，设计一段课堂引入。' }), 500);
+    const t = setTimeout(() => add({ type: 'ai', content: '老师您好，我是子言，我可以帮您「搜索优质素材」、「修改课件内容」等，有什么需要帮忙的，直接告诉我即可。\n\n例如跟我说：请结合近期时事和本节课的内容，设计一段课堂引入。' }), 500);
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const S = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       recRef.current = new S(); recRef.current.lang = 'zh-CN'; recRef.current.continuous = false; recRef.current.interimResults = false; setHasSR(true);
