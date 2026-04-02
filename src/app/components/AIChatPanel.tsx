@@ -15,7 +15,7 @@ const TOOL_SETTINGS: Record<string, SettingItem[]> = {
   ],
   '搜索背景知识': [
     { key: 'sourceType', label: '资料来源', options: ['外研社素材库', '全网搜索', '学术资源'] },
-    { key: 'difficulty', label: '内容难度', options: ['简单', '一般', '进阶'] },
+    { key: 'difficulty', label: '内容难度', options: ['初中水平', '高中水平', '大学水平'] },
   ],
   '例题生成': [
     { key: 'qtype', label: '题型', options: ['选择题', '填空题', '判断题', '简答题'] },
@@ -36,14 +36,17 @@ const TOOL_SETTINGS: Record<string, SettingItem[]> = {
   ],
 };
 
-const TOOL_PLACEHOLDER: Record<string, string> = {
-  '生成课堂引入': '请结合近期时事和本节课的内容，设计一段课堂引入',
-  '搜索背景知识': '搜索关于爱迪生的英文背景资料',
-  '例题生成': '根据本节课的知识点，生成例题',
-  '互动环节设计': '设计一个关于团队协作的互动环节',
-  '总结要点': '帮我总结一下这份课件的知识要点',
-  '生成演讲稿': '请给第1-3页生成一份演讲稿',
-};
+function buildPrompt(t: string, s: Record<string, string>): string {
+  switch (t) {
+    case '生成课堂引入': return `请结合${s.introType || '情境导入'}方式，设计一段${s.difficulty || '适中'}难度的课堂引入`;
+    case '搜索背景知识': return `搜索${s.difficulty || '简单'}难度的背景知识，来源：${s.sourceType || '外研社素材库'}`;
+    case '例题生成': return `生成${s.count || '2题'}${s.qtype || '选择题'}，难度${s.difficulty || '基础'}`;
+    case '互动环节设计': return `设计一个${s.form || '小组讨论'}互动环节，时长${s.duration || '10分钟'}`;
+    case '总结要点': return `帮我总结${s.scope || '全部课件'}的知识要点，格式：${s.format || '要点列表'}`;
+    case '生成演讲稿': return `请生成一份${s.style || '正式'}风格、${s.duration || '5分钟'}的演讲稿`;
+    default: return '';
+  }
+}
 
 const TI: Record<string, React.ReactNode> = {
   '生成课堂引入': <Lightbulb className="w-3.5 h-3.5" />, '搜索背景知识': <Search className="w-3.5 h-3.5" />,
@@ -73,7 +76,7 @@ export function AIChatPanel() {
     setMsgs(p => [...p, { id: (Date.now() + Math.random()).toString(), timestamp: new Date(), ...m } as Message]);
 
   useEffect(() => {
-    const t = setTimeout(() => add({ type: 'ai', content: '老师您好，我是子言，我可以帮您「搜索优质素材」、「修改课件内容」等，有什么需要帮忙的，直接告诉我即可。\n\n例如跟我说：请结合近期时事和本节课的内容，设计一段课堂引入。' }), 500);
+    const t = setTimeout(() => add({ type: 'ai', content: '老师您好，我是子言，我可以帮您 \n「搜索优质素材」 \n「修改课件内容」\n「设计课堂活动」等等. \n 有什么需要帮忙的，直接告诉我即可。\n\n例如跟我说：请结合近期时事和本节课的内容，设计一段课堂引入。' }), 500);
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const S = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       recRef.current = new S(); recRef.current.lang = 'zh-CN'; recRef.current.continuous = false; recRef.current.interimResults = false; setHasSR(true);
@@ -85,14 +88,17 @@ export function AIChatPanel() {
 
   const selectTool = (t: string) => {
     setTool(t); setToolMenu(false); setShowSettings(true);
-    // Init default settings (first option of each)
     const defs: Record<string, string> = {};
     TOOL_SETTINGS[t]?.forEach(s => { defs[s.key] = s.options[0]; });
     setSettings(defs);
-    setInp(TOOL_PLACEHOLDER[t] || "");
+    setInp(buildPrompt(t, defs));
   };
   const clearTool = () => { setTool(null); setShowSettings(false); setSettings({}); };
-  const updateSetting = (key: string, val: string) => setSettings(prev => ({ ...prev, [key]: val }));
+  const updateSetting = (key: string, val: string) => {
+    const next = { ...settings, [key]: val };
+    setSettings(next);
+    if (tool) setInp(buildPrompt(tool, next));
+  };
 
   const send = () => {
     if (!inp.trim()) return;
@@ -336,7 +342,7 @@ function TW({ text, isAI, onComplete }: { text: string; isAI: boolean; onComplet
   useEffect(() => {
     if (!isAI || r.current) { setS(text); setD(true); onComplete?.(); return; }
     r.current = true; setS(''); setD(false); let i = 0;
-    const iv = setInterval(() => { if (i < text.length) { setS(text.slice(0, i + 1)); i++; } else { setD(true); clearInterval(iv); onComplete?.(); } }, 10);
+    const iv = setInterval(() => { if (i < text.length) { setS(text.slice(0, i + 1)); i++; } else { setD(true); clearInterval(iv); onComplete?.(); } }, 30);
     return () => clearInterval(iv);
   }, [text, isAI]);
   return <>{s}{!d && isAI && <span className="inline-block w-1 h-4 bg-gray-400 ml-0.5 animate-pulse" />}</>;
