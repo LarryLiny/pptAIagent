@@ -25,7 +25,7 @@ export default function EditorPage() {
       {/* 素材库透明点击区域 — 覆盖在背景图的"素材库"图标上 */}
       <button onClick={() => setResourceOpen(true)}
         className="absolute z-10 bg-transparent hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
-        style={{ top: '12px', left: '188px', width: '72px', height: '68px' }}
+        style={{ top: '6px', left: '50px', width: '80px', height: '72px' }}
         title="素材库"
       />
 
