@@ -86,18 +86,12 @@
           <div class="arrow-btn"><i-icon-park-outline:down class="arrow" /></div>
         </Popover>
       </div>
-      <div class="menu-item" v-tooltip="'AI生成PPT'" @click="openAIPPTDialog(); mainMenuVisible = false">
+      <div class="menu-item" v-tooltip="'AI助手'" @click="toggleAIChatPanel()">
         <span class="text ai">AI</span>
-      </div>
-      <div class="menu-item ai-chat-btn" v-tooltip="'AI助手'" @click="toggleAIChatPanel()">
-        <span class="text ai-assistant">🤖</span>
       </div>
       <div class="menu-item" v-tooltip="'导出'" @click="setDialogForExport('pptx')">
         <i-icon-park-outline:download class="icon" />
       </div>
-      <a class="github-link" v-tooltip="'Copyright © 2020-PRESENT pipipi-pikachu'" href="https://github.com/pipipi-pikachu/PPTist" target="_blank">
-        <div class="menu-item"><i-icon-park-outline:github class="icon" /></div>
-      </a>
     </div>
 
     <Drawer
@@ -370,14 +364,6 @@ const toggleAIChatPanel = () => {
   }
 }
 .github-link {
-  display: inline-block;
-  height: 30px;
-}
-.ai-chat-btn {
-  .ai-assistant {
-    font-size: 16px;
-    width: 18px;
-    text-align: center;
-  }
+  display: none;
 }
 </style>

@@ -12,11 +12,14 @@
           :style="{ height: `${remarkHeight}px` }"
         />
       </div>
-      <Toolbar class="layout-content-right" />
-      <transition name="slide-right">
-        <AIChatPanel class="layout-content-ai" v-if="showAIChatPanel" />
-      </transition>
+      <div class="layout-content-right-wrapper">
+        <Toolbar class="layout-content-right" />
+        <transition name="fade-slide">
+          <AIChatPanel class="layout-content-ai" v-if="showAIChatPanel" />
+        </transition>
+      </div>
     </div>
+  </div>
   </div>
 
   <SelectPanel v-if="showSelectPanel" />
@@ -117,25 +120,33 @@ usePasteEvent()
     height: 40px;
   }
 }
-.layout-content-right {
+.layout-content-right-wrapper {
   width: 260px;
   height: 100%;
   flex-shrink: 0;
+  position: relative;
+}
+.layout-content-right {
+  width: 100%;
+  height: 100%;
 }
 .layout-content-ai {
-  width: 340px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: 100%;
-  flex-shrink: 0;
+  z-index: 100;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
 }
 
-.slide-right-enter-active,
-.slide-right-leave-active {
-  transition: all 0.3s ease;
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.25s ease;
 }
-.slide-right-enter-from,
-.slide-right-leave-to {
-  width: 0;
+.fade-slide-enter-from,
+.fade-slide-leave-to {
   opacity: 0;
-  overflow: hidden;
+  transform: translateX(20px);
 }
 </style>

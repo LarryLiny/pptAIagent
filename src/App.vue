@@ -21,6 +21,7 @@ import Editor from './views/Editor/index.vue'
 import Screen from './views/Screen/index.vue'
 import Mobile from './views/Mobile/index.vue'
 import FullscreenSpin from '@/components/FullscreenSpin.vue'
+import useImport from '@/hooks/useImport'
 
 const _isPC = isPC()
 
@@ -31,6 +32,7 @@ const screenStore = useScreenStore()
 const { databaseId } = storeToRefs(mainStore)
 const { slides } = storeToRefs(slidesStore)
 const { screening } = storeToRefs(screenStore)
+const { importPPTXFile } = useImport()
 
 const isAudienceMode = new URLSearchParams(window.location.search).get('mode') === 'audience'
 
@@ -47,8 +49,20 @@ onMounted(async () => {
     screenStore.setScreening(true)
   }
   else {
-    const slides = await api.getMockData('slides')
-    slidesStore.setSlides(slides)
+    // Load default PPTX file
+    try {
+      const response = await fetch('./mocks/default.pptx')
+      const arrayBuffer = await response.arrayBuffer()
+      const blob = new Blob([arrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' })
+      const file = new File([blob], 'default.pptx', { type: blob.type })
+      const fileList = [file] as unknown as FileList
+      importPPTXFile(fileList, { cover: true })
+    }
+    catch {
+      // Fallback to mock slides
+      const slides = await api.getMockData('slides')
+      slidesStore.setSlides(slides)
+    }
 
     await deleteDiscardedDB()
     snapshotStore.initSnapshotDatabase()
