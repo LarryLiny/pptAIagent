@@ -27,8 +27,13 @@
       >
         <div class="msg-bubble" :class="msg.type">
           <div class="msg-tool-tag" v-if="msg.tool">{{ msg.tool }}</div>
-          <div class="msg-text">
+          <div class="msg-text" v-if="msg.content">
             <TypeWriter :text="msg.content" :animate="msg.type === 'ai'" :key="msg.id + msg.content.length" @complete="msg._btnsVisible = true" />
+          </div>
+          <div class="msg-thinking" v-else-if="msg.type === 'ai'">
+            <span class="thinking-dot"></span>
+            <span class="thinking-dot"></span>
+            <span class="thinking-dot"></span>
           </div>
           <img v-if="msg.image" :src="msg.image" class="msg-image" />
         </div>
@@ -282,11 +287,6 @@ function addMsg(msg: Omit<Message, 'id' | 'timestamp' | '_btnsVisible'>) {
     _btnsVisible: msg.type === 'user',
     ...msg,
   })
-  if (msg.type === 'ai' && msg.content) {
-    const match = msg.content.match(/「([^」]+)」/)
-    if (match) lastAIContent.value = match[1]
-    else lastAIContent.value = msg.content
-  }
   scrollToBottom()
 }
 
@@ -406,15 +406,13 @@ async function callLLM(userMessage: string): Promise<void> {
 
     chatHistory.value.push({ role: 'assistant', content: fullContent })
 
-    // Extract insertable content
-    const match = fullContent.match(/「([^」]+)」/)
-    if (match) {
-      lastAIContent.value = match[1]
-      aiMsg.buttons = [{ label: '插入到PPT', action: 'insert' }, { label: '新建页插入', action: 'agree' }]
-    }
-    else {
-      lastAIContent.value = fullContent
-    }
+    // Always store full content for insertion, and always show insert buttons
+    lastAIContent.value = fullContent
+    aiMsg.buttons = [
+      { label: '插入当前页', action: 'insert' },
+      { label: '新建页插入', action: 'agree' },
+      { label: '插入备注', action: 'insert-note' },
+    ]
   }
   catch (err) {
     aiMsg.content = '网络错误，请检查连接后重试。'
@@ -437,16 +435,63 @@ async function send() {
   await callLLM(txt)
 }
 
+// --- Smart insertion with auto-layout ---
+const SLIDE_W = 1000
+const SLIDE_H = 562
+const PADDING = 60
+const CONTENT_W = SLIDE_W - PADDING * 2
+const CONTENT_H = SLIDE_H - PADDING * 2
+const MAX_CHARS_PER_SLIDE = 600 // rough limit per slide
+
+function textToHtml(text: string, fontSize: number): string {
+  return text.split('\n').map(line =>
+    `<p style="text-align: left;"><span style="font-size: ${fontSize}px; color: #333;">${line || '&nbsp;'}</span></p>`
+  ).join('')
+}
+
+function estimateFontSize(text: string): number {
+  const len = text.length
+  if (len < 100) return 20
+  if (len < 200) return 18
+  if (len < 400) return 16
+  if (len < 600) return 14
+  return 12
+}
+
+function splitTextToPages(text: string): string[] {
+  if (text.length <= MAX_CHARS_PER_SLIDE) return [text]
+
+  const paragraphs = text.split('\n')
+  const pages: string[] = []
+  let current = ''
+
+  for (const p of paragraphs) {
+    if ((current + '\n' + p).length > MAX_CHARS_PER_SLIDE && current) {
+      pages.push(current.trim())
+      current = p
+    }
+    else {
+      current = current ? current + '\n' + p : p
+    }
+  }
+  if (current.trim()) pages.push(current.trim())
+  return pages
+}
+
 function insertTextToCurrentSlide(text: string) {
+  const fontSize = estimateFontSize(text)
+  const lineCount = text.split('\n').length
+  const estHeight = Math.min(CONTENT_H, Math.max(100, lineCount * fontSize * 1.6 + 20))
+
   const textEl: PPTTextElement = {
     type: 'text',
     id: nanoid(10),
-    width: 800,
-    height: 200,
-    left: 100,
-    top: 300,
+    width: CONTENT_W,
+    height: estHeight,
+    left: PADDING,
+    top: (SLIDE_H - estHeight) / 2,
     rotate: 0,
-    content: `<p style="text-align: left;"><span style="font-size: 18px; color: #333;">${text.replace(/\n/g, '</span></p><p style="text-align: left;"><span style="font-size: 18px; color: #333;">')}</span></p>`,
+    content: textToHtml(text, fontSize),
     defaultFontName: '',
     defaultColor: '#333',
     lineHeight: 1.5,
@@ -457,26 +502,30 @@ function insertTextToCurrentSlide(text: string) {
 }
 
 function insertTextAsNewSlide(text: string) {
-  const newSlide: Slide = {
-    id: nanoid(10),
-    elements: [{
-      type: 'text',
+  const pages = splitTextToPages(text)
+  const slides: Slide[] = pages.map(pageText => {
+    const fontSize = estimateFontSize(pageText)
+    return {
       id: nanoid(10),
-      width: 800,
-      height: 400,
-      left: 100,
-      top: 80,
-      rotate: 0,
-      content: `<p style="text-align: left;"><span style="font-size: 20px; color: #333;">${text.replace(/\n/g, '</span></p><p style="text-align: left;"><span style="font-size: 20px; color: #333;">')}</span></p>`,
-      defaultFontName: '',
-      defaultColor: '#333',
-      lineHeight: 1.5,
-      fill: '',
-      outline: { color: '', width: 0, style: 'solid' },
-    } as PPTTextElement],
-    background: { type: 'solid', color: '#ffffff' },
-  }
-  addSlidesFromData([newSlide])
+      elements: [{
+        type: 'text',
+        id: nanoid(10),
+        width: CONTENT_W,
+        height: CONTENT_H,
+        left: PADDING,
+        top: PADDING,
+        rotate: 0,
+        content: textToHtml(pageText, fontSize),
+        defaultFontName: '',
+        defaultColor: '#333',
+        lineHeight: 1.5,
+        fill: '',
+        outline: { color: '', width: 0, style: 'solid' },
+      } as PPTTextElement],
+      background: { type: 'solid', color: '#ffffff' },
+    }
+  })
+  addSlidesFromData(slides)
 }
 
 function insertToNotes(text: string) {
@@ -604,6 +653,27 @@ onMounted(() => {
     white-space: pre-wrap;
     line-height: 1.5;
     font-size: 12.5px;
+  }
+  .msg-thinking {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+  }
+  .thinking-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #9ca3af;
+    animation: thinking-bounce 1.4s infinite ease-in-out both;
+
+    &:nth-child(1) { animation-delay: 0s; }
+    &:nth-child(2) { animation-delay: 0.2s; }
+    &:nth-child(3) { animation-delay: 0.4s; }
+  }
+  @keyframes thinking-bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
   }
   .msg-image {
     margin-top: 8px; border-radius: 6px;
