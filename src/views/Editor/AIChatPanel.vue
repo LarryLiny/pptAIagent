@@ -1,5 +1,8 @@
 <template>
-  <div class="ai-chat-panel">
+  <div class="ai-chat-panel" :style="{ width: panelWidth + 'px' }">
+    <!-- Resize handle -->
+    <div class="resize-handle" @mousedown="startResize"></div>
+
     <!-- Header -->
     <div class="panel-header">
       <div class="header-info">
@@ -9,7 +12,9 @@
           <div class="status">在线</div>
         </div>
       </div>
-      <div class="close-btn" @click="closePanel">✕</div>
+      <div class="close-btn" @click="closePanel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </div>
     </div>
 
     <!-- Messages -->
@@ -20,25 +25,20 @@
         class="msg-row"
         :class="{ 'msg-user': msg.type === 'user', 'msg-ai': msg.type === 'ai' }"
       >
-        <div class="msg-wrapper">
-          <div class="msg-avatar" v-if="msg.type === 'ai'">AI</div>
-          <div class="msg-body">
-            <div class="msg-bubble" :class="msg.type">
-              <div class="msg-tool-tag" v-if="msg.tool">{{ msg.tool }}</div>
-              <div class="msg-text">
-                <TypeWriter :text="msg.content" :animate="msg.type === 'ai'" :key="msg.id" @complete="msg._btnsVisible = true" />
-              </div>
-              <img v-if="msg.image" :src="msg.image" class="msg-image" />
-            </div>
-            <div class="msg-buttons" v-if="msg._btnsVisible && msg.buttons?.length">
-              <button
-                v-for="(btn, i) in msg.buttons"
-                :key="i"
-                class="msg-btn"
-                @click="handleButton(btn.action)"
-              >{{ btn.label }}</button>
-            </div>
+        <div class="msg-bubble" :class="msg.type">
+          <div class="msg-tool-tag" v-if="msg.tool">{{ msg.tool }}</div>
+          <div class="msg-text">
+            <TypeWriter :text="msg.content" :animate="msg.type === 'ai'" :key="msg.id + msg.content.length" @complete="msg._btnsVisible = true" />
           </div>
+          <img v-if="msg.image" :src="msg.image" class="msg-image" />
+        </div>
+        <div class="msg-buttons" v-if="msg._btnsVisible && msg.buttons?.length">
+          <button
+            v-for="(btn, i) in msg.buttons"
+            :key="i"
+            class="msg-btn"
+            @click="handleButton(btn.action)"
+          >{{ btn.label }}</button>
         </div>
         <div class="msg-time">{{ formatTime(msg.timestamp) }}</div>
       </div>
@@ -48,8 +48,13 @@
     <transition name="slide-up">
       <div class="settings-panel" v-if="showSettings && currentToolSettings">
         <div class="settings-header">
-          <span class="settings-title">✨ {{ currentTool }} · 高级配置</span>
-          <span class="settings-close" @click="showSettings = false">✕</span>
+          <span class="settings-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            {{ currentTool }} · 高级配置
+          </span>
+          <span class="settings-close" @click="showSettings = false">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </span>
         </div>
         <div v-for="s in currentToolSettings" :key="s.key" class="setting-group">
           <div class="setting-label">{{ s.label }}</div>
@@ -70,13 +75,13 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <button class="tool-btn" @click="fileInputRef?.click()" title="上传文件">
-          <span class="tool-icon">📎</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
         </button>
         <div class="tool-dropdown" @mouseenter="toolMenuOpen = true" @mouseleave="toolMenuOpen = false">
           <button class="tool-btn with-text">
-            <span class="tool-icon">🔧</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
             <span>工具</span>
-            <span class="arrow">▾</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="dropdown-menu" v-if="toolMenuOpen">
             <div
@@ -85,7 +90,7 @@
               class="dropdown-item"
               @click="selectTool(t)"
             >
-              <span class="dropdown-icon">{{ toolIcons[t] }}</span>
+              <component :is="toolIconComponents[t]" />
               {{ t }}
             </div>
           </div>
@@ -94,13 +99,15 @@
       <div class="toolbar-right">
         <div class="help-dropdown">
           <button class="tool-btn with-text" @click="helpOpen = !helpOpen">
-            <span class="tool-icon">❓</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             <span>帮助</span>
           </button>
           <div class="help-menu" v-if="helpOpen">
             <div class="help-header">
               <span>示例问题</span>
-              <span class="help-close" @click="helpOpen = false">✕</span>
+              <span class="help-close" @click="helpOpen = false">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </span>
             </div>
             <div
               v-for="q in helpQuestions"
@@ -116,11 +123,15 @@
     <!-- Tool Tag -->
     <div class="tool-tag-row" v-if="currentTool">
       <div class="tool-tag">
-        ✨ {{ currentTool }}
-        <span class="tag-close" @click="clearTool">✕</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        {{ currentTool }}
+        <span class="tag-close" @click="clearTool">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </span>
       </div>
       <button class="more-settings-btn" :class="{ active: showSettings }" @click="showSettings = !showSettings">
-        ⚙ 更多设置 {{ showSettings ? '▴' : '▾' }}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        更多设置
       </button>
     </div>
 
@@ -132,8 +143,8 @@
         :placeholder="currentTool ? `输入您的需求，${currentTool}...` : '输入消息...'"
         class="chat-input"
       />
-      <button class="send-btn" :disabled="!inputText.trim()" @click="send">
-        <span>➤</span>
+      <button class="send-btn" :disabled="!inputText.trim() || isStreaming" @click="send">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>
     </div>
 
@@ -148,13 +159,16 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, nextTick, onMounted, reactive } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, reactive, h } from 'vue'
 import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore } from '@/store'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import TypeWriter from './TypeWriter.vue'
 import type { Slide, PPTTextElement } from '@/types/slides'
+
+const LLM_API_KEY = 'sk-CUBymvpjvH47EGAca1tygKVCtIGBgvVFJwKWTfJxyv8yGK7A'
+const STORAGE_KEY_WIDTH = 'ai-chat-panel-width'
 
 interface MsgButton { label: string; action: string }
 interface Message {
@@ -168,6 +182,19 @@ interface Message {
   _btnsVisible: boolean
 }
 interface SettingItem { key: string; label: string; options: string[] }
+
+// SVG icon components (line style)
+const iconLightbulb = () => h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }, [h('path', { d: 'M9 18h6' }), h('path', { d: 'M10 22h4' }), h('path', { d: 'M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z' })])
+const iconSearch = () => h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }, [h('circle', { cx: 11, cy: 11, r: 8 }), h('line', { x1: 21, y1: 21, x2: '16.65', y2: '16.65' })])
+const iconFileText = () => h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }, [h('path', { d: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z' }), h('polyline', { points: '14 2 14 8 20 8' }), h('line', { x1: 16, y1: 13, x2: 8, y2: 13 }), h('line', { x1: 16, y1: 17, x2: 8, y2: 17 })])
+const iconUsers = () => h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }, [h('path', { d: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2' }), h('circle', { cx: 9, cy: 7, r: 4 }), h('path', { d: 'M23 21v-2a4 4 0 00-3-3.87' }), h('path', { d: 'M16 3.13a4 4 0 010 7.75' })])
+const iconList = () => h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }, [h('line', { x1: 8, y1: 6, x2: 21, y2: 6 }), h('line', { x1: 8, y1: 12, x2: 21, y2: 12 }), h('line', { x1: 8, y1: 18, x2: 21, y2: 18 }), h('line', { x1: 3, y1: 6, x2: '3.01', y2: 6 }), h('line', { x1: 3, y1: 12, x2: '3.01', y2: 12 }), h('line', { x1: 3, y1: 18, x2: '3.01', y2: 18 })])
+const iconMic = () => h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }, [h('path', { d: 'M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z' }), h('path', { d: 'M19 10v2a7 7 0 01-14 0v-2' }), h('line', { x1: 12, y1: 19, x2: 12, y2: 23 }), h('line', { x1: 8, y1: 23, x2: 16, y2: 23 })])
+
+const toolIconComponents: Record<string, any> = {
+  '生成课堂引入': iconLightbulb, '搜索背景知识': iconSearch, '例题生成': iconFileText,
+  '互动环节设计': iconUsers, '总结要点': iconList, '生成演讲稿': iconMic,
+}
 
 const TOOL_SETTINGS: Record<string, SettingItem[]> = {
   '生成课堂引入': [
@@ -198,10 +225,6 @@ const TOOL_SETTINGS: Record<string, SettingItem[]> = {
 }
 
 const toolList = ['生成课堂引入', '搜索背景知识', '例题生成', '互动环节设计', '总结要点', '生成演讲稿']
-const toolIcons: Record<string, string> = {
-  '生成课堂引入': '💡', '搜索背景知识': '🔍', '例题生成': '📝',
-  '互动环节设计': '👥', '总结要点': '📋', '生成演讲稿': '🎤',
-}
 const helpQuestions = ['把这段文字难度调低', '再给我生成一页相似题', '给我找一些爱迪生的英文背景资料', '从俄乌冲突引入本节课要学的Russia这个单词']
 
 const mainStore = useMainStore()
@@ -209,9 +232,7 @@ const slidesStore = useSlidesStore()
 const { addSlidesFromData, addElementsFromData } = useAddSlidesOrElements()
 const { addHistorySnapshot } = useHistorySnapshot()
 
-// Store the last AI-generated content for insertion
 const lastAIContent = ref('')
-
 const messages = ref<Message[]>([])
 const inputText = ref('')
 const currentTool = ref<string | null>(null)
@@ -219,11 +240,40 @@ const showSettings = ref(false)
 const settings = reactive<Record<string, string>>({})
 const toolMenuOpen = ref(false)
 const helpOpen = ref(false)
-const step = ref(0)
+const isStreaming = ref(false)
 const messagesRef = ref<HTMLElement>()
 const fileInputRef = ref<HTMLInputElement>()
-
 const currentToolSettings = ref<SettingItem[] | null>(null)
+
+// Chat history for LLM context
+const chatHistory = ref<{ role: string; content: string }[]>([
+  { role: 'system', content: '你是"子言"，一个专业的课件制作AI助手。你帮助老师搜索优质素材、修改课件内容、设计课堂活动、生成课堂引入、例题、演讲稿等。回答要简洁实用，适合直接插入PPT。如果生成的内容适合插入PPT，请用「」包裹可插入的内容。' },
+])
+
+// Resizable panel width
+const panelWidth = ref(parseInt(localStorage.getItem(STORAGE_KEY_WIDTH) || '320'))
+const isResizing = ref(false)
+
+function startResize(e: MouseEvent) {
+  e.preventDefault()
+  isResizing.value = true
+  const startX = e.clientX
+  const startWidth = panelWidth.value
+
+  const onMouseMove = (ev: MouseEvent) => {
+    const delta = startX - ev.clientX
+    const newWidth = Math.max(260, Math.min(600, startWidth + delta))
+    panelWidth.value = newWidth
+  }
+  const onMouseUp = () => {
+    isResizing.value = false
+    localStorage.setItem(STORAGE_KEY_WIDTH, panelWidth.value.toString())
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
 
 function addMsg(msg: Omit<Message, 'id' | 'timestamp' | '_btnsVisible'>) {
   messages.value.push({
@@ -232,13 +282,15 @@ function addMsg(msg: Omit<Message, 'id' | 'timestamp' | '_btnsVisible'>) {
     _btnsVisible: msg.type === 'user',
     ...msg,
   })
-  // Track AI content for insertion
   if (msg.type === 'ai' && msg.content) {
-    // Extract text between 「」 if present, otherwise use full content
     const match = msg.content.match(/「([^」]+)」/)
     if (match) lastAIContent.value = match[1]
     else lastAIContent.value = msg.content
   }
+  scrollToBottom()
+}
+
+function scrollToBottom() {
   nextTick(() => {
     if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight
   })
@@ -288,55 +340,101 @@ function closePanel() {
   mainStore.setAIChatPanelState(false)
 }
 
-function send() {
-  if (!inputText.value.trim()) return
+async function callLLM(userMessage: string): Promise<void> {
+  chatHistory.value.push({ role: 'user', content: userMessage })
+
+  const aiMsg: Message = {
+    id: Date.now().toString() + Math.random(),
+    type: 'ai',
+    content: '',
+    timestamp: new Date(),
+    _btnsVisible: false,
+  }
+  messages.value.push(aiMsg)
+  isStreaming.value = true
+
+  try {
+    const response = await fetch('/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LLM_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: chatHistory.value,
+        stream: true,
+      }),
+    })
+
+    if (!response.ok) {
+      aiMsg.content = '抱歉，AI 服务暂时不可用，请稍后再试。'
+      aiMsg._btnsVisible = true
+      isStreaming.value = false
+      return
+    }
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    let fullContent = ''
+
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n').filter(line => line.startsWith('data: '))
+
+        for (const line of lines) {
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') continue
+
+          try {
+            const parsed = JSON.parse(data)
+            const delta = parsed.choices?.[0]?.delta?.content
+            if (delta) {
+              fullContent += delta
+              aiMsg.content = fullContent
+              scrollToBottom()
+            }
+          }
+          catch {}
+        }
+      }
+    }
+
+    chatHistory.value.push({ role: 'assistant', content: fullContent })
+
+    // Extract insertable content
+    const match = fullContent.match(/「([^」]+)」/)
+    if (match) {
+      lastAIContent.value = match[1]
+      aiMsg.buttons = [{ label: '插入到PPT', action: 'insert' }, { label: '新建页插入', action: 'agree' }]
+    }
+    else {
+      lastAIContent.value = fullContent
+    }
+  }
+  catch (err) {
+    aiMsg.content = '网络错误，请检查连接后重试。'
+  }
+  finally {
+    aiMsg._btnsVisible = true
+    isStreaming.value = false
+    scrollToBottom()
+  }
+}
+
+async function send() {
+  if (!inputText.value.trim() || isStreaming.value) return
   const txt = inputText.value
   const ct = currentTool.value
-  const st = { ...settings }
   addMsg({ type: 'user', content: txt, tool: ct || undefined })
   inputText.value = ''
   clearTool()
 
-  setTimeout(() => {
-    if (ct === '生成课堂引入') {
-      const introType = st.introType || '情境导入'
-      const diff = st.difficulty || '适中'
-      addMsg({
-        type: 'ai',
-        content: `好的，根据当前PPT的内容，已为您生成「${introType}」风格、「${diff}」难度的课堂引入：\n\n「Good morning, class! Before we begin today's lesson on Environmental Protection, let me show you something. Last week, a massive wildfire broke out in Australia, destroying thousands of hectares of forest. What do you think caused this disaster? And more importantly — what can we do about it? Today, we'll explore these questions together and learn how to express our ideas about protecting our planet in English.」`,
-        image: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
-        buttons: [{ label: '插入到PPT', action: 'insert' }, { label: '重新生成', action: 'regenerate' }],
-      })
-      return
-    }
-    if (ct === '生成演讲稿') {
-      addMsg({ type: 'ai', content: '以下是为您生成的课堂演讲稿：\n\n「同学们好，今天我们来学习环境保护这一主题。大家知道，全球变暖正在影响我们的生活。接下来，我们将通过几个案例了解如何用英语表达环保理念，并探讨我们能为地球做些什么。」', buttons: [{ label: '插入到备注', action: 'insert-note' }, { label: '重新生成', action: 'regenerate-speech' }] })
-      return
-    }
-    if (txt.includes('难度调低') || txt.includes('难度降低')) {
-      addMsg({ type: 'ai', content: '好的，已根据外研社学生能力标准为您调整文本难度：\n\n「We should protect the environment. Trees give us clean air. We can save water and use less plastic. Small actions can make a big difference. Let\'s work together to keep our Earth clean and green.」', buttons: [{ label: '替换文本', action: 'replace-text' }, { label: '重新生成', action: 'regenerate-easy' }] })
-      return
-    }
-    if (txt.includes('相似题')) {
-      addMsg({ type: 'ai', content: '好的，已从外研社题库中为您匹配到一道相似题：\n\nChoose the correct answer:\nIf I ___ more time yesterday, I would have finished the project.\nA. have  B. had had  C. had  D. would have\n\nAnswer: B', buttons: [{ label: '替换文本', action: 'replace-text' }, { label: '重新生成', action: 'regenerate-quiz' }] })
-      return
-    }
-    if (txt.includes('爱迪生') || txt.includes('Edison')) {
-      addMsg({ type: 'ai', content: '为您找到以下资料：\n\n「Thomas Edison (1847–1931) was an American inventor who developed the phonograph, the motion picture camera, and the practical electric light bulb. He held over 1,000 patents. His Menlo Park laboratory was one of the first dedicated research facilities.」', buttons: [{ label: '替换文本', action: 'replace-text' }, { label: '重新生成', action: 'regenerate' }] })
-      return
-    }
-    if (txt.includes('俄乌') || txt.includes('Russia')) {
-      addMsg({ type: 'ai', content: '好的，为您生成了一段引入短文：\n\n「Russia is the largest country in the world. Recently, the conflict between Russia and Ukraine has drawn global attention. This event reminds us of the importance of peace and diplomacy. Today, let\'s learn more about Russia — its geography, culture, and the word itself.」', buttons: [{ label: '替换文本', action: 'replace-text' }, { label: '重新生成', action: 'regenerate' }] })
-      return
-    }
-    if (step.value === 0) {
-      addMsg({ type: 'ai', content: '好的，通过搜索外研社的素材库，推荐插入以下内容：\n\n「In recent years, the importance of environmental protection has become increasingly evident. Scientists and researchers worldwide are working together to develop sustainable solutions for our planet. Education plays a crucial role in raising awareness about environmental issues.」', buttons: [{ label: '插入', action: 'insert' }, { label: '重新生成', action: 'regenerate' }] })
-      step.value = 1
-    }
-    else {
-      addMsg({ type: 'ai', content: '好的，通过全网搜索，找到了合适的素材，将为您新建一页，然后插入内容，是否同意？', buttons: [{ label: '同意', action: 'agree' }, { label: '拒绝', action: 'reject' }] })
-    }
-  }, 1000)
+  await callLLM(txt)
 }
 
 function insertTextToCurrentSlide(text: string) {
@@ -361,27 +459,22 @@ function insertTextToCurrentSlide(text: string) {
 function insertTextAsNewSlide(text: string) {
   const newSlide: Slide = {
     id: nanoid(10),
-    elements: [
-      {
-        type: 'text',
-        id: nanoid(10),
-        width: 800,
-        height: 400,
-        left: 100,
-        top: 80,
-        rotate: 0,
-        content: `<p style="text-align: left;"><span style="font-size: 20px; color: #333;">${text.replace(/\n/g, '</span></p><p style="text-align: left;"><span style="font-size: 20px; color: #333;">')}</span></p>`,
-        defaultFontName: '',
-        defaultColor: '#333',
-        lineHeight: 1.5,
-        fill: '',
-        outline: { color: '', width: 0, style: 'solid' },
-      } as PPTTextElement,
-    ],
-    background: {
-      type: 'solid',
-      color: '#ffffff',
-    },
+    elements: [{
+      type: 'text',
+      id: nanoid(10),
+      width: 800,
+      height: 400,
+      left: 100,
+      top: 80,
+      rotate: 0,
+      content: `<p style="text-align: left;"><span style="font-size: 20px; color: #333;">${text.replace(/\n/g, '</span></p><p style="text-align: left;"><span style="font-size: 20px; color: #333;">')}</span></p>`,
+      defaultFontName: '',
+      defaultColor: '#333',
+      lineHeight: 1.5,
+      fill: '',
+      outline: { color: '', width: 0, style: 'solid' },
+    } as PPTTextElement],
+    background: { type: 'solid', color: '#ffffff' },
   }
   addSlidesFromData([newSlide])
 }
@@ -400,7 +493,7 @@ function handleButton(action: string) {
   const actions: Record<string, () => void> = {
     'agree': () => {
       insertTextAsNewSlide(content)
-      setTimeout(() => addMsg({ type: 'ai', content: '已为您创建新的一页PPT并插入内容。' }), 500)
+      addMsg({ type: 'ai', content: '已为您创建新的一页PPT并插入内容。' })
     },
     'insert': () => {
       insertTextToCurrentSlide(content)
@@ -415,10 +508,6 @@ function handleButton(action: string) {
       addMsg({ type: 'ai', content: '演讲稿已插入到对应页面的备注中，还有其他需要帮忙的吗？' })
     },
     'reject': () => addMsg({ type: 'ai', content: '好的，已取消操作。还有其他需要帮忙的吗？' }),
-    'regenerate-easy': () => addMsg({ type: 'ai', content: '好的，重新生成了更简单的版本：\n\n「Our planet needs help. We can plant trees, save water, and recycle. Walking or riding a bike is good for the air. Let\'s protect our beautiful Earth together.」', buttons: [{ label: '替换文本', action: 'replace-text' }, { label: '重新生成', action: 'regenerate-easy' }] }),
-    'regenerate-quiz': () => addMsg({ type: 'ai', content: '好的，重新生成了一道题目：\n\nI wish I ___ to the party last night.\nA. go  B. went  C. had gone  D. would go\n\nAnswer: C', buttons: [{ label: '替换文本', action: 'replace-text' }, { label: '重新生成', action: 'regenerate-quiz' }] }),
-    'regenerate-speech': () => addMsg({ type: 'ai', content: '好的，我为您重新生成演讲稿：\n\n「各位同学，欢迎来到今天的英语课。本节课我们聚焦环境保护话题，将学习相关词汇与表达。希望大家积极参与讨论。准备好了吗？Let\'s go!」', buttons: [{ label: '插入到备注', action: 'insert-note' }, { label: '重新生成', action: 'regenerate-speech' }] }),
-    'regenerate': () => addMsg({ type: 'ai', content: '好的，我为您重新生成内容：\n\n「Climate change represents one of the most pressing challenges of our time. Renewable energy sources offer promising alternatives to fossil fuels.」', buttons: [{ label: '插入', action: 'insert' }, { label: '重新生成', action: 'regenerate' }] }),
   }
   actions[action]?.()
 }
@@ -434,8 +523,8 @@ function handleFileUpload(e: Event) {
 
 onMounted(() => {
   setTimeout(() => {
-    addMsg({ type: 'ai', content: '老师您好，我是子言，我可以帮您 \n「搜索优质素材」 \n「修改课件内容」\n「设计课堂活动」等等. \n 有什么需要帮忙的，直接告诉我即可。\n\n例如跟我说：请结合近期时事和本节课的内容，设计一段课堂引入。' })
-  }, 500)
+    addMsg({ type: 'ai', content: '老师您好，我是子言，我可以帮您\n「搜索优质素材」\n「修改课件内容」\n「设计课堂活动」等等.\n有什么需要帮忙的，直接告诉我即可。' })
+  }, 300)
 })
 </script>
 
@@ -447,40 +536,42 @@ onMounted(() => {
   background: #fff;
   border-left: 1px solid #e5e7eb;
   font-size: 13px;
+  position: relative;
+  min-width: 260px;
+}
+
+.resize-handle {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  &:hover { background: rgba(139, 92, 246, 0.15); }
 }
 
 .panel-header {
-  padding: 10px 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid #e5e7eb;
   background: linear-gradient(to right, #f5f3ff, #eff6ff);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 
-  .header-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+  .header-info { display: flex; align-items: center; gap: 8px; }
   .avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
+    width: 28px; height: 28px; border-radius: 50%;
     background: linear-gradient(135deg, #a78bfa, #60a5fa);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 11px; font-weight: 600;
   }
-  .name { font-weight: 500; color: #111; }
+  .name { font-weight: 500; color: #111; font-size: 13px; }
   .status { font-size: 11px; color: #999; }
   .close-btn {
-    cursor: pointer;
-    color: #999;
-    font-size: 14px;
-    padding: 4px;
+    cursor: pointer; color: #999; padding: 4px;
+    display: flex; align-items: center;
     &:hover { color: #333; }
   }
 }
@@ -488,287 +579,178 @@ onMounted(() => {
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 12px;
 
-  .msg-row {
-    margin-bottom: 16px;
-  }
-  .msg-user .msg-wrapper { flex-direction: row-reverse; }
-  .msg-wrapper {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .msg-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #a78bfa, #60a5fa);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 10px;
-    flex-shrink: 0;
-  }
+  .msg-row { margin-bottom: 12px; }
+  .msg-user { display: flex; flex-direction: column; align-items: flex-end; }
+  .msg-ai { display: flex; flex-direction: column; align-items: flex-start; }
+
   .msg-bubble {
-    border-radius: 16px;
-    padding: 10px 14px;
-    max-width: 85%;
+    border-radius: 12px;
+    padding: 8px 12px;
+    max-width: 95%;
+    word-break: break-word;
 
-    &.user {
-      background: #3b82f6;
-      color: #fff;
-    }
-    &.ai {
-      background: #f3f4f6;
-      color: #111;
-    }
+    &.user { background: #3b82f6; color: #fff; }
+    &.ai { background: #f3f4f6; color: #111; }
   }
   .msg-tool-tag {
     display: inline-block;
-    background: #ede9fe;
-    color: #7c3aed;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-bottom: 6px;
+    background: #ede9fe; color: #7c3aed;
+    font-size: 10px; padding: 1px 6px;
+    border-radius: 8px; margin-bottom: 4px;
   }
   .msg-text {
     white-space: pre-wrap;
-    line-height: 1.6;
-    font-size: 13px;
+    line-height: 1.5;
+    font-size: 12.5px;
   }
   .msg-image {
-    margin-top: 10px;
-    border-radius: 8px;
-    width: 100%;
-    max-height: 180px;
-    object-fit: cover;
+    margin-top: 8px; border-radius: 6px;
+    width: 100%; max-height: 150px; object-fit: cover;
   }
   .msg-buttons {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
   }
   .msg-btn {
-    padding: 6px 14px;
-    background: #fff;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    font-size: 12px;
-    color: #374151;
-    cursor: pointer;
+    padding: 4px 10px; background: #fff;
+    border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 11px; color: #374151; cursor: pointer;
     &:hover { background: #f9fafb; border-color: #9ca3af; }
   }
   .msg-time {
-    font-size: 11px;
-    color: #9ca3af;
-    margin-top: 4px;
-    padding: 0 8px;
+    font-size: 10px; color: #9ca3af;
+    margin-top: 2px; padding: 0 4px;
   }
-  .msg-user .msg-time { text-align: right; }
 }
 
 .settings-panel {
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
-  padding: 12px 16px;
-  max-height: 200px;
+  padding: 10px 12px;
+  max-height: 180px;
   overflow-y: auto;
+  flex-shrink: 0;
 
   .settings-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 8px;
   }
   .settings-title {
-    font-size: 12px;
-    font-weight: 500;
-    color: #7c3aed;
+    font-size: 11px; font-weight: 500; color: #7c3aed;
+    display: flex; align-items: center; gap: 4px;
   }
   .settings-close {
-    cursor: pointer;
-    color: #9ca3af;
+    cursor: pointer; color: #9ca3af; display: flex;
     &:hover { color: #666; }
   }
-  .setting-group { margin-bottom: 10px; }
-  .setting-label { font-size: 11px; color: #6b7280; margin-bottom: 6px; }
-  .setting-options { display: flex; flex-wrap: wrap; gap: 6px; }
+  .setting-group { margin-bottom: 8px; }
+  .setting-label { font-size: 10px; color: #6b7280; margin-bottom: 4px; }
+  .setting-options { display: flex; flex-wrap: wrap; gap: 4px; }
   .setting-opt {
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    border: 1px solid #d1d5db;
-    background: #fff;
-    color: #4b5563;
-    cursor: pointer;
-    transition: all 0.15s;
+    padding: 3px 8px; border-radius: 12px; font-size: 10px;
+    border: 1px solid #d1d5db; background: #fff; color: #4b5563;
+    cursor: pointer; transition: all 0.15s;
     &:hover { border-color: #a78bfa; color: #7c3aed; }
     &.active { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
   }
 }
 
 .toolbar {
-  padding: 8px 16px;
+  padding: 6px 12px;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 
-  .toolbar-left, .toolbar-right { display: flex; gap: 8px; }
+  .toolbar-left, .toolbar-right { display: flex; gap: 6px; }
 }
 
 .tool-btn {
-  padding: 6px 8px;
-  background: #fff;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12px;
-  color: #374151;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  padding: 5px 6px; background: #fff;
+  border: 1px solid #d1d5db; border-radius: 6px;
+  cursor: pointer; font-size: 11px; color: #374151;
+  display: flex; align-items: center; gap: 3px;
   &:hover { background: #f3f4f6; border-color: #9ca3af; }
-  &.with-text { padding: 6px 10px; }
-  .tool-icon { font-size: 14px; }
-  .arrow { font-size: 10px; }
+  &.with-text { padding: 5px 8px; }
 }
 
-.tool-dropdown, .help-dropdown {
-  position: relative;
-}
+.tool-dropdown, .help-dropdown { position: relative; }
 .dropdown-menu {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 4px;
-  width: 160px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  overflow: hidden;
-  z-index: 10;
+  position: absolute; bottom: 100%; left: 0;
+  margin-bottom: 4px; width: 150px;
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  overflow: hidden; z-index: 10;
 }
 .dropdown-item {
-  padding: 8px 12px;
-  font-size: 13px;
-  color: #374151;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 6px 10px; font-size: 12px; color: #374151;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
   &:hover { background: #f3f4f6; }
-  .dropdown-icon { font-size: 14px; }
 }
 
 .help-menu {
-  position: absolute;
-  bottom: 100%;
-  right: 0;
-  margin-bottom: 8px;
-  width: 280px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  padding: 12px;
-  z-index: 10;
+  position: absolute; bottom: 100%; right: 0;
+  margin-bottom: 6px; width: 260px;
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  padding: 10px; z-index: 10;
 
   .help-header {
-    display: flex;
-    justify-content: space-between;
-    font-size: 13px;
-    font-weight: 500;
-    margin-bottom: 8px;
+    display: flex; justify-content: space-between;
+    font-size: 12px; font-weight: 500; margin-bottom: 6px;
   }
-  .help-close { cursor: pointer; color: #999; &:hover { color: #333; } }
+  .help-close { cursor: pointer; color: #999; display: flex; &:hover { color: #333; } }
   .help-item {
-    padding: 8px;
-    background: #f9fafb;
-    border-radius: 6px;
-    font-size: 12px;
-    color: #4b5563;
-    cursor: pointer;
-    margin-bottom: 6px;
+    padding: 6px; background: #f9fafb; border-radius: 4px;
+    font-size: 11px; color: #4b5563; cursor: pointer; margin-bottom: 4px;
     &:hover { background: #f3f4f6; }
   }
 }
 
 .tool-tag-row {
-  padding: 6px 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 4px 12px;
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
 }
 .tool-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  background: #f5f3ff;
-  border: 1px solid #ddd6fe;
-  border-radius: 20px;
-  font-size: 11px;
-  color: #7c3aed;
-  .tag-close { cursor: pointer; margin-left: 2px; &:hover { color: #5b21b6; } }
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 8px; background: #f5f3ff;
+  border: 1px solid #ddd6fe; border-radius: 12px;
+  font-size: 10px; color: #7c3aed;
+  .tag-close { cursor: pointer; margin-left: 2px; display: flex; &:hover { color: #5b21b6; } }
 }
 .more-settings-btn {
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #6b7280;
-  cursor: pointer;
+  padding: 3px 8px; border-radius: 12px; font-size: 10px;
+  border: 1px solid #d1d5db; background: #fff; color: #6b7280;
+  cursor: pointer; display: flex; align-items: center; gap: 3px;
   &:hover { border-color: #9ca3af; color: #374151; }
   &.active { background: #e5e7eb; color: #374151; }
 }
 
 .input-area {
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-top: 1px solid #e5e7eb;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
 }
 .chat-input {
-  flex: 1;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 13px;
-  outline: none;
+  flex: 1; height: 34px; padding: 0 10px;
+  border: 1px solid #d1d5db; border-radius: 6px;
+  font-size: 12px; outline: none;
   &:focus { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2); }
 }
 .send-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #8b5cf6;
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 6px;
+  background: #8b5cf6; color: #fff; border: none;
+  cursor: pointer; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0;
   &:hover { background: #7c3aed; }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
-.slide-up-enter-active, .slide-up-leave-active {
-  transition: all 0.2s ease;
-}
-.slide-up-enter-from, .slide-up-leave-to {
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-}
+.slide-up-enter-active, .slide-up-leave-active { transition: all 0.2s ease; }
+.slide-up-enter-from, .slide-up-leave-to { max-height: 0; opacity: 0; overflow: hidden; }
 </style>

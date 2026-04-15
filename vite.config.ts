@@ -38,6 +38,11 @@ export default defineConfig({
         target: 'https://server.pptist.cn',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+      '/llm': {
+        target: 'https://modelproxy.unipus.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/llm/, ''),
       }
     }
   },

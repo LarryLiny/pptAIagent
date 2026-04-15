@@ -18,9 +18,29 @@ const displayText = ref('')
 const done = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 let started = false
+let charIndex = 0
+
+function startTyping() {
+  if (timer) clearInterval(timer)
+  done.value = false
+  timer = setInterval(() => {
+    if (charIndex < props.text.length) {
+      // Type 2 chars at a time for speed
+      const end = Math.min(charIndex + 2, props.text.length)
+      displayText.value = props.text.slice(0, end)
+      charIndex = end
+    }
+    else {
+      done.value = true
+      if (timer) clearInterval(timer)
+      timer = null
+      emit('complete')
+    }
+  }, 10)
+}
 
 onMounted(() => {
-  if (!props.animate || started) {
+  if (!props.animate) {
     displayText.value = props.text
     done.value = true
     emit('complete')
@@ -28,19 +48,23 @@ onMounted(() => {
   }
   started = true
   displayText.value = ''
-  done.value = false
-  let i = 0
-  timer = setInterval(() => {
-    if (i < props.text.length) {
-      displayText.value = props.text.slice(0, i + 1)
-      i++
-    }
-    else {
-      done.value = true
-      if (timer) clearInterval(timer)
-      emit('complete')
-    }
-  }, 30)
+  charIndex = 0
+  startTyping()
+})
+
+// Support streaming: when text grows, keep typing
+watch(() => props.text, (newText) => {
+  if (!started || !props.animate) {
+    displayText.value = newText
+    if (!props.animate) emit('complete')
+    return
+  }
+  // If text grew and we were done, restart typing from where we left off
+  if (done.value && newText.length > charIndex) {
+    done.value = false
+    startTyping()
+  }
+  // If timer is already running, it will pick up the new length automatically
 })
 
 onUnmounted(() => {
