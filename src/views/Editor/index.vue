@@ -20,7 +20,6 @@
       </div>
     </div>
   </div>
-  </div>
 
   <SelectPanel v-if="showSelectPanel" />
   <SearchPanel v-if="showSearchPanel" />
