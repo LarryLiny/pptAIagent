@@ -8,7 +8,7 @@ import Components from 'unplugin-vue-components/vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: '',
+  base: process.env.DEPLOY_BASE || '',
   plugins: [
     vue(),
     Components({

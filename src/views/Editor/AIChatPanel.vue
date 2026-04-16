@@ -172,6 +172,7 @@ import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import TypeWriter from './TypeWriter.vue'
 import type { Slide, PPTTextElement } from '@/types/slides'
 
+const LLM_API_URL = import.meta.env.DEV ? '/llm/v1/chat/completions' : 'https://modelproxy.unipus.cn/v1/chat/completions'
 const LLM_API_KEY = 'sk-CUBymvpjvH47EGAca1tygKVCtIGBgvVFJwKWTfJxyv8yGK7A'
 const STORAGE_KEY_WIDTH = 'ai-chat-panel-width'
 
@@ -354,7 +355,7 @@ async function callLLM(userMessage: string): Promise<void> {
   isStreaming.value = true
 
   try {
-    const response = await fetch('/llm/v1/chat/completions', {
+    const response = await fetch(LLM_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
