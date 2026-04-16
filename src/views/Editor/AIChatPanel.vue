@@ -171,6 +171,7 @@ import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import TypeWriter from './TypeWriter.vue'
 import type { Slide, PPTTextElement } from '@/types/slides'
+import { describeCurrentSlide, pptTools, executeTool } from './aiPptTools'
 
 const LLM_API_URL = import.meta.env.DEV ? '/llm/v1/chat/completions' : 'https://modelproxy.unipus.cn/v1/chat/completions'
 const LLM_API_KEY = 'sk-CUBymvpjvH47EGAca1tygKVCtIGBgvVFJwKWTfJxyv8yGK7A'
@@ -252,8 +253,18 @@ const fileInputRef = ref<HTMLInputElement>()
 const currentToolSettings = ref<SettingItem[] | null>(null)
 
 // Chat history for LLM context
-const chatHistory = ref<{ role: string; content: string }[]>([
-  { role: 'system', content: '你是"子言"，一个专业的课件制作AI助手。你帮助老师搜索优质素材、修改课件内容、设计课堂活动、生成课堂引入、例题、演讲稿等。回答要简洁实用，适合直接插入PPT。如果生成的内容适合插入PPT，请用「」包裹可插入的内容。' },
+const SYSTEM_PROMPT = `你是"子言"，一个专业的PPT课件制作AI助手。你帮助老师搜索优质素材、修改课件内容、设计课堂活动、生成课堂引入、例题、演讲稿等。
+
+你可以通过工具直接操作PPT：修改元素位置/尺寸/内容/样式、添加文字和图片、新建页面、删除元素、修改背景和备注。
+
+画布尺寸固定为 1000×562 像素(16:9)。
+
+当用户要求调整格式、排版、布局时，请使用工具直接操作，操作完成后简短告知用户做了什么。
+当用户要求生成内容（课堂引入、例题等）时，先生成内容文本回复，用户可以选择插入。
+当用户的指令涉及修改已有元素时，请根据提供的当前页面元素信息找到对应的element_id来操作。`
+
+const chatHistory = ref<{ role: string; content: string; tool_calls?: any[]; tool_call_id?: string }[]>([
+  { role: 'system', content: SYSTEM_PROMPT },
 ])
 
 // Resizable panel width
@@ -342,7 +353,10 @@ function closePanel() {
 }
 
 async function callLLM(userMessage: string): Promise<void> {
-  chatHistory.value.push({ role: 'user', content: userMessage })
+  // Inject current slide context into the user message
+  const slideContext = describeCurrentSlide()
+  const enrichedMessage = `[当前幻灯片信息]\n${slideContext}\n\n[用户请求]\n${userMessage}`
+  chatHistory.value.push({ role: 'user', content: enrichedMessage })
 
   const aiMsg: Message = {
     id: Date.now().toString() + Math.random(),
@@ -355,7 +369,8 @@ async function callLLM(userMessage: string): Promise<void> {
   isStreaming.value = true
 
   try {
-    const response = await fetch(LLM_API_URL, {
+    // Phase 1: Non-streaming call with tools to check for function calls
+    const toolResponse = await fetch(LLM_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -364,56 +379,99 @@ async function callLLM(userMessage: string): Promise<void> {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: chatHistory.value,
-        stream: true,
+        tools: pptTools,
+        tool_choice: 'auto',
       }),
     })
 
-    if (!response.ok) {
+    if (!toolResponse.ok) {
       aiMsg.content = '抱歉，AI 服务暂时不可用，请稍后再试。'
       aiMsg._btnsVisible = true
       isStreaming.value = false
       return
     }
 
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-    let fullContent = ''
+    const toolResult = await toolResponse.json()
+    const choice = toolResult.choices?.[0]
 
-    if (reader) {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+    if (choice?.message?.tool_calls?.length) {
+      // Execute tool calls
+      const toolCalls = choice.message.tool_calls
+      chatHistory.value.push(choice.message)
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n').filter(line => line.startsWith('data: '))
+      const executionResults: string[] = []
+      for (const tc of toolCalls) {
+        let args: Record<string, any> = {}
+        try { args = JSON.parse(tc.function.arguments) } catch {}
+        const result = executeTool(tc.function.name, args)
+        executionResults.push(`${tc.function.name}: ${result}`)
+        chatHistory.value.push({
+          role: 'tool',
+          content: result,
+          tool_call_id: tc.id,
+        })
+      }
 
-        for (const line of lines) {
-          const data = line.slice(6).trim()
-          if (data === '[DONE]') continue
+      // Phase 2: Streaming call to get the natural language summary
+      const summaryResponse = await fetch(LLM_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${LLM_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: chatHistory.value,
+          stream: true,
+        }),
+      })
 
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta?.content
-            if (delta) {
-              fullContent += delta
-              aiMsg.content = fullContent
-              scrollToBottom()
-            }
-          }
-          catch {}
-        }
+      if (summaryResponse.ok) {
+        await streamResponse(summaryResponse, aiMsg)
+      }
+      else {
+        // Fallback: show execution results directly
+        aiMsg.content = '已完成操作：\n' + executionResults.join('\n')
+        chatHistory.value.push({ role: 'assistant', content: aiMsg.content })
+      }
+    }
+    else {
+      // No tool calls — just a text response, stream it
+      const textContent = choice?.message?.content || ''
+      chatHistory.value.push({ role: 'assistant', content: textContent })
+
+      // Re-do as streaming for better UX
+      const streamResp = await fetch(LLM_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${LLM_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: chatHistory.value.slice(0, -1), // remove the assistant msg we just added
+          stream: true,
+        }),
+      })
+
+      if (streamResp.ok) {
+        // Remove the non-streamed assistant message
+        chatHistory.value.pop()
+        await streamResponse(streamResp, aiMsg)
+      }
+      else {
+        aiMsg.content = textContent
       }
     }
 
-    chatHistory.value.push({ role: 'assistant', content: fullContent })
-
-    // Always store full content for insertion, and always show insert buttons
-    lastAIContent.value = fullContent
-    aiMsg.buttons = [
-      { label: '插入当前页', action: 'insert' },
-      { label: '新建页插入', action: 'agree' },
-      { label: '插入备注', action: 'insert-note' },
-    ]
+    // Set insert buttons for content responses
+    lastAIContent.value = aiMsg.content
+    if (aiMsg.content && !aiMsg.buttons?.length) {
+      aiMsg.buttons = [
+        { label: '插入当前页', action: 'insert' },
+        { label: '新建页插入', action: 'agree' },
+      ]
+    }
   }
   catch (err) {
     aiMsg.content = '网络错误，请检查连接后重试。'
@@ -423,6 +481,40 @@ async function callLLM(userMessage: string): Promise<void> {
     isStreaming.value = false
     scrollToBottom()
   }
+}
+
+async function streamResponse(response: Response, aiMsg: Message): Promise<void> {
+  const reader = response.body?.getReader()
+  const decoder = new TextDecoder()
+  let fullContent = ''
+
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split('\n').filter(line => line.startsWith('data: '))
+
+      for (const line of lines) {
+        const data = line.slice(6).trim()
+        if (data === '[DONE]') continue
+
+        try {
+          const parsed = JSON.parse(data)
+          const delta = parsed.choices?.[0]?.delta?.content
+          if (delta) {
+            fullContent += delta
+            aiMsg.content = fullContent
+            scrollToBottom()
+          }
+        }
+        catch {}
+      }
+    }
+  }
+
+  chatHistory.value.push({ role: 'assistant', content: fullContent })
 }
 
 async function send() {
