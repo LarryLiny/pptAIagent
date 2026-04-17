@@ -174,6 +174,7 @@ import type { Slide, PPTTextElement } from '@/types/slides'
 import { describeCurrentSlide, pptTools, executeTool } from './aiPptTools'
 
 const LLM_API_URL = import.meta.env.DEV ? '/llm/v1/chat/completions' : 'https://modelproxy.unipus.cn/v1/chat/completions'
+const LLM_MODEL = 'gpt-4o-mini'
 const LLM_API_KEY = 'sk-CUBymvpjvH47EGAca1tygKVCtIGBgvVFJwKWTfJxyv8yGK7A'
 const STORAGE_KEY_WIDTH = 'ai-chat-panel-width'
 
@@ -377,7 +378,7 @@ async function callLLM(userMessage: string): Promise<void> {
         'Authorization': `Bearer ${LLM_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: LLM_MODEL,
         messages: chatHistory.value,
         tools: pptTools,
         tool_choice: 'auto',
@@ -420,7 +421,7 @@ async function callLLM(userMessage: string): Promise<void> {
           'Authorization': `Bearer ${LLM_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: LLM_MODEL,
           messages: chatHistory.value,
           stream: true,
         }),
@@ -436,32 +437,10 @@ async function callLLM(userMessage: string): Promise<void> {
       }
     }
     else {
-      // No tool calls — just a text response, stream it
+      // No tool calls — use the text directly from the first response (no second request!)
       const textContent = choice?.message?.content || ''
+      aiMsg.content = textContent
       chatHistory.value.push({ role: 'assistant', content: textContent })
-
-      // Re-do as streaming for better UX
-      const streamResp = await fetch(LLM_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${LLM_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: chatHistory.value.slice(0, -1), // remove the assistant msg we just added
-          stream: true,
-        }),
-      })
-
-      if (streamResp.ok) {
-        // Remove the non-streamed assistant message
-        chatHistory.value.pop()
-        await streamResponse(streamResp, aiMsg)
-      }
-      else {
-        aiMsg.content = textContent
-      }
     }
 
     // Set insert buttons for content responses
