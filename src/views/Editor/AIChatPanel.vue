@@ -601,110 +601,201 @@ async function send() {
   await callLLM(txt)
 }
 
-// --- Smart insertion with auto-layout ---
+// --- Smart insertion: parse markdown → PPT elements ---
 const SLIDE_W = 1000
 const SLIDE_H = 562
 const MARGIN_X = 60
 const MARGIN_TOP = 50
-const TITLE_FONT = 28
-const BODY_FONT = 16
-const TITLE_H = 50
-const GAP = 20 // gap between title and body
 
-// Parse AI content into structured blocks (title + body paragraphs)
-function parseContentBlocks(text: string): { title: string; body: string } {
-  const lines = text.split('\n').filter(l => l.trim())
-  if (lines.length === 0) return { title: '', body: '' }
-
-  // First line is title if it's short and the rest is longer
-  const firstLine = lines[0].replace(/^[#\s*]+/, '').trim()
-  const isFirstLineTitle = firstLine.length < 60 && lines.length > 1
-
-  if (isFirstLineTitle) {
-    return {
-      title: firstLine,
-      body: lines.slice(1).join('\n').trim(),
-    }
-  }
-  return { title: '', body: text.trim() }
+interface MdBlock {
+  type: 'heading' | 'paragraph' | 'list' | 'code' | 'blockquote'
+  level?: number // for headings: 1-3
+  text: string   // plain text content
+  items?: string[] // for lists
 }
 
-function makeHtml(text: string, fontSize: number, color: string, align: string, bold: boolean): string {
+function parseMarkdownBlocks(md: string): MdBlock[] {
+  const blocks: MdBlock[] = []
+  const lines = md.split('\n')
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Heading
+    const hMatch = line.match(/^(#{1,3})\s+(.+)/)
+    if (hMatch) {
+      blocks.push({ type: 'heading', level: hMatch[1].length, text: hMatch[2].replace(/\*\*/g, '').trim() })
+      i++
+      continue
+    }
+
+    // Code block
+    if (line.trim().startsWith('```')) {
+      const codeLines: string[] = []
+      i++
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        codeLines.push(lines[i])
+        i++
+      }
+      i++ // skip closing ```
+      blocks.push({ type: 'code', text: codeLines.join('\n') })
+      continue
+    }
+
+    // List item
+    if (/^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && (/^\s*[-*+]\s+/.test(lines[i]) || /^\s*\d+\.\s+/.test(lines[i]))) {
+        items.push(lines[i].replace(/^\s*[-*+]\s+/, '').replace(/^\s*\d+\.\s+/, '').replace(/\*\*/g, '').trim())
+        i++
+      }
+      blocks.push({ type: 'list', text: items.join('\n'), items })
+      continue
+    }
+
+    // Blockquote
+    if (line.startsWith('>')) {
+      const qLines: string[] = []
+      while (i < lines.length && lines[i].startsWith('>')) {
+        qLines.push(lines[i].replace(/^>\s*/, ''))
+        i++
+      }
+      blocks.push({ type: 'blockquote', text: qLines.join('\n') })
+      continue
+    }
+
+    // Empty line — skip
+    if (!line.trim()) { i++; continue }
+
+    // Regular paragraph (collect consecutive non-empty lines)
+    const pLines: string[] = []
+    while (i < lines.length && lines[i].trim() && !lines[i].match(/^#{1,3}\s/) && !lines[i].startsWith('```') && !lines[i].startsWith('>') && !/^\s*[-*+]\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i])) {
+      pLines.push(lines[i])
+      i++
+    }
+    if (pLines.length) {
+      blocks.push({ type: 'paragraph', text: pLines.join(' ').replace(/\*\*/g, '').replace(/\*/g, '').trim() })
+    }
+  }
+
+  return blocks
+}
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/^>\s*/gm, '')
+    .trim()
+}
+
+function mdToHtml(text: string, fontSize: number, color: string, align: string, bold: boolean): string {
   const bStyle = bold ? 'font-weight: bold;' : ''
   return text.split('\n').map(line =>
     `<p style="text-align: ${align};"><span style="font-size: ${fontSize}px; color: ${color}; ${bStyle}">${line || '&nbsp;'}</span></p>`
   ).join('')
 }
 
-function estimateBodyFontSize(text: string): number {
-  const len = text.length
-  if (len < 150) return 18
-  if (len < 300) return 16
-  if (len < 500) return 14
-  return 12
-}
+function buildSlideElements(content: string): PPTTextElement[] {
+  const blocks = parseMarkdownBlocks(content)
+  if (blocks.length === 0) return []
 
-function buildSlideElements(text: string): PPTTextElement[] {
-  const { title, body } = parseContentBlocks(text)
   const elements: PPTTextElement[] = []
   const contentW = SLIDE_W - MARGIN_X * 2
+  let currentY = MARGIN_TOP
 
-  if (title && body) {
-    // Title + Body layout
-    elements.push({
-      type: 'text', id: nanoid(10),
-      left: MARGIN_X, top: MARGIN_TOP,
-      width: contentW, height: TITLE_H,
-      rotate: 0,
-      content: makeHtml(title, TITLE_FONT, '#1a1a2e', 'left', true),
-      defaultFontName: '', defaultColor: '#1a1a2e',
-      lineHeight: 1.3, fill: '',
-      outline: { color: '', width: 0, style: 'solid' },
-    })
+  for (const block of blocks) {
+    if (currentY > SLIDE_H - 40) break // don't overflow
 
-    const bodyTop = MARGIN_TOP + TITLE_H + GAP
-    const bodyH = SLIDE_H - bodyTop - 40
-    const bodyFontSize = estimateBodyFontSize(body)
+    if (block.type === 'heading') {
+      const fontSize = block.level === 1 ? 28 : block.level === 2 ? 22 : 18
+      const h = fontSize * 1.5 + 10
 
-    elements.push({
-      type: 'text', id: nanoid(10),
-      left: MARGIN_X, top: bodyTop,
-      width: contentW, height: bodyH,
-      rotate: 0,
-      content: makeHtml(body, bodyFontSize, '#333', 'left', false),
-      defaultFontName: '', defaultColor: '#333',
-      lineHeight: 1.6, paragraphSpace: 6, fill: '',
-      outline: { color: '', width: 0, style: 'solid' },
-    })
+      elements.push({
+        type: 'text', id: nanoid(10),
+        left: MARGIN_X, top: currentY, width: contentW, height: h,
+        rotate: 0,
+        content: mdToHtml(block.text, fontSize, '#1a1a2e', 'left', true),
+        defaultFontName: '', defaultColor: '#1a1a2e',
+        lineHeight: 1.3, fill: '',
+        outline: { color: '', width: 0, style: 'solid' },
+      })
+      currentY += h + 10
+    }
+    else if (block.type === 'list' && block.items) {
+      const fontSize = 15
+      const listText = block.items.map(item => `• ${item}`).join('\n')
+      const lineCount = block.items.length
+      const h = Math.min(SLIDE_H - currentY - 30, lineCount * fontSize * 1.8 + 10)
+
+      elements.push({
+        type: 'text', id: nanoid(10),
+        left: MARGIN_X + 10, top: currentY, width: contentW - 10, height: h,
+        rotate: 0,
+        content: mdToHtml(listText, fontSize, '#333', 'left', false),
+        defaultFontName: '', defaultColor: '#333',
+        lineHeight: 1.7, paragraphSpace: 4, fill: '',
+        outline: { color: '', width: 0, style: 'solid' },
+      })
+      currentY += h + 12
+    }
+    else if (block.type === 'code') {
+      const fontSize = 13
+      const lineCount = block.text.split('\n').length
+      const h = Math.min(SLIDE_H - currentY - 30, lineCount * fontSize * 1.5 + 16)
+
+      elements.push({
+        type: 'text', id: nanoid(10),
+        left: MARGIN_X, top: currentY, width: contentW, height: h,
+        rotate: 0,
+        content: mdToHtml(block.text, fontSize, '#e5e7eb', 'left', false),
+        defaultFontName: 'Courier New', defaultColor: '#e5e7eb',
+        lineHeight: 1.4, fill: '#1e1e2e',
+        outline: { color: '#374151', width: 1, style: 'solid' },
+      })
+      currentY += h + 12
+    }
+    else if (block.type === 'blockquote') {
+      const fontSize = 15
+      const lineCount = block.text.split('\n').length
+      const h = Math.min(SLIDE_H - currentY - 30, lineCount * fontSize * 1.6 + 10)
+
+      elements.push({
+        type: 'text', id: nanoid(10),
+        left: MARGIN_X + 8, top: currentY, width: contentW - 8, height: h,
+        rotate: 0,
+        content: mdToHtml(block.text, fontSize, '#6b7280', 'left', false),
+        defaultFontName: '', defaultColor: '#6b7280',
+        lineHeight: 1.5, fill: '#f9fafb',
+        outline: { color: '', width: 0, style: 'solid' },
+      })
+      currentY += h + 12
+    }
+    else {
+      // paragraph
+      const len = block.text.length
+      const fontSize = len < 150 ? 16 : len < 300 ? 15 : 14
+      const lineCount = Math.ceil(len / (contentW / fontSize * 1.5))
+      const h = Math.min(SLIDE_H - currentY - 30, Math.max(30, lineCount * fontSize * 1.7 + 10))
+
+      elements.push({
+        type: 'text', id: nanoid(10),
+        left: MARGIN_X, top: currentY, width: contentW, height: h,
+        rotate: 0,
+        content: mdToHtml(block.text, fontSize, '#333', 'left', false),
+        defaultFontName: '', defaultColor: '#333',
+        lineHeight: 1.6, paragraphSpace: 5, fill: '',
+        outline: { color: '', width: 0, style: 'solid' },
+      })
+      currentY += h + 10
+    }
   }
-  else if (title) {
-    // Title only — centered
-    elements.push({
-      type: 'text', id: nanoid(10),
-      left: MARGIN_X, top: (SLIDE_H - 80) / 2,
-      width: contentW, height: 80,
-      rotate: 0,
-      content: makeHtml(title, 32, '#1a1a2e', 'center', true),
-      defaultFontName: '', defaultColor: '#1a1a2e',
-      lineHeight: 1.3, fill: '',
-      outline: { color: '', width: 0, style: 'solid' },
-    })
-  }
-  else {
-    // Body only
-    const bodyFontSize = estimateBodyFontSize(body)
-    const bodyH = SLIDE_H - MARGIN_TOP * 2
-    elements.push({
-      type: 'text', id: nanoid(10),
-      left: MARGIN_X, top: MARGIN_TOP,
-      width: contentW, height: bodyH,
-      rotate: 0,
-      content: makeHtml(body, bodyFontSize, '#333', 'left', false),
-      defaultFontName: '', defaultColor: '#333',
-      lineHeight: 1.6, paragraphSpace: 6, fill: '',
-      outline: { color: '', width: 0, style: 'solid' },
-    })
-  }
+
   return elements
 }
 
@@ -716,33 +807,37 @@ function insertTextToCurrentSlide(text: string) {
 }
 
 function insertTextAsNewSlide(text: string) {
-  // Split long text into multiple pages
-  const MAX_CHARS = 600
-  const chunks: string[] = []
-  if (text.length <= MAX_CHARS) {
-    chunks.push(text)
+  const elements = buildSlideElements(text)
+
+  // If too many elements, split into multiple slides
+  if (elements.length <= 6) {
+    const slide: Slide = {
+      id: nanoid(10),
+      elements,
+      background: { type: 'solid', color: '#ffffff' },
+    }
+    addSlidesFromData([slide])
   }
   else {
-    const paragraphs = text.split('\n')
-    let current = ''
-    for (const p of paragraphs) {
-      if ((current + '\n' + p).length > MAX_CHARS && current) {
-        chunks.push(current.trim())
-        current = p
+    // Split elements roughly in half per slide
+    const perPage = Math.ceil(elements.length / Math.ceil(elements.length / 5))
+    const slides: Slide[] = []
+    for (let i = 0; i < elements.length; i += perPage) {
+      const pageEls = elements.slice(i, i + perPage)
+      // Re-layout Y positions for this page
+      let y = MARGIN_TOP
+      for (const el of pageEls) {
+        el.top = y
+        y += el.height + 10
       }
-      else {
-        current = current ? current + '\n' + p : p
-      }
+      slides.push({
+        id: nanoid(10),
+        elements: pageEls,
+        background: { type: 'solid', color: '#ffffff' },
+      })
     }
-    if (current.trim()) chunks.push(current.trim())
+    addSlidesFromData(slides)
   }
-
-  const slides: Slide[] = chunks.map(chunk => ({
-    id: nanoid(10),
-    elements: buildSlideElements(chunk),
-    background: { type: 'solid', color: '#ffffff' },
-  }))
-  addSlidesFromData(slides)
 }
 
 function insertToNotes(text: string) {
@@ -871,9 +966,9 @@ onMounted(() => {
     border-radius: 8px; margin-bottom: 4px;
   }
   .msg-text {
-    white-space: pre-wrap;
     line-height: 1.5;
     font-size: 12.5px;
+    word-break: break-word;
   }
   .msg-thinking {
     display: flex;
