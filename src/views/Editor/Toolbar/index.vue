@@ -15,7 +15,7 @@
       </div>
     </div>
     <div class="content" :class="{ 'no-padding': toolbarState === ToolbarStates.AI_CHAT }">
-      <AIChatPanel v-if="toolbarState === ToolbarStates.AI_CHAT" />
+      <AISidebarPanel v-if="toolbarState === ToolbarStates.AI_CHAT" />
       <component :is="currentPanelComponent" v-else></component>
     </div>
   </div>
@@ -34,7 +34,7 @@ import SlideDesignPanel from './SlideDesignPanel/index.vue'
 import SlideAnimationPanel from './SlideAnimationPanel.vue'
 import MultiPositionPanel from './MultiPositionPanel.vue'
 import MultiStylePanel from './MultiStylePanel.vue'
-import AIChatPanel from '../AIChatPanel.vue'
+import AISidebarPanel from '../AISidebarPanel.vue'
 
 const mainStore = useMainStore()
 const { activeElementIdList, activeElementList, activeGroupElementId, toolbarState } = storeToRefs(mainStore)
@@ -86,7 +86,7 @@ const iconPosition = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24
 ])
 
 const iconAI = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
-  h('path', { d: 'M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z' }),
+  h('path', { d: 'M12 2l2.09 6.26L20 10.27l-4.91 3.82L16.18 22 12 18.27 7.82 22l1.09-7.91L4 10.27l5.91-2.01L12 2z' }),
 ])
 
 const tabIcons: Record<string, any> = {
@@ -199,8 +199,9 @@ const currentPanelComponent = computed(() => {
   }
 
   &.ai-tab {
-    margin-top: auto;
     border-top: 1px solid $borderColor;
+    margin-top: 4px;
+    padding-top: 12px;
 
     .tab-label {
       background: linear-gradient(90deg, #a78bfa, #60a5fa);

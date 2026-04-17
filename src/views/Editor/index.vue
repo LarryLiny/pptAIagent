@@ -16,6 +16,8 @@
     </div>
   </div>
 
+  <AIChatFloating />
+
   <SelectPanel v-if="showSelectPanel" />
   <SearchPanel v-if="showSearchPanel" />
   <NotesPanel v-if="showNotesPanel" />
@@ -65,6 +67,7 @@ import SymbolPanel from './SymbolPanel.vue'
 import MarkupPanel from './MarkupPanel.vue'
 import ImageLibPanel from './ImageLibPanel.vue'
 import AIPPTDialog from './AIPPTDialog.vue'
+import AIChatFloating from './AIChatFloating.vue'
 import Modal from '@/components/Modal.vue'
 
 const mainStore = useMainStore()
