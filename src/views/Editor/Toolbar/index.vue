@@ -5,7 +5,7 @@
         v-for="tab in currentTabs"
         :key="tab.key"
         class="side-tab"
-        :class="{ active: toolbarState === tab.key }"
+        :class="{ active: toolbarState === tab.key, 'ai-tab': tab.key === ToolbarStates.AI_CHAT }"
         @click="setToolbarState(tab.key as ToolbarStates)"
       >
         <div class="tab-icon">
@@ -14,8 +14,9 @@
         <div class="tab-label">{{ tab.label }}</div>
       </div>
     </div>
-    <div class="content">
-      <component :is="currentPanelComponent"></component>
+    <div class="content" :class="{ 'no-padding': toolbarState === ToolbarStates.AI_CHAT }">
+      <AIChatPanel v-if="toolbarState === ToolbarStates.AI_CHAT" />
+      <component :is="currentPanelComponent" v-else></component>
     </div>
   </div>
 </template>
@@ -33,23 +34,29 @@ import SlideDesignPanel from './SlideDesignPanel/index.vue'
 import SlideAnimationPanel from './SlideAnimationPanel.vue'
 import MultiPositionPanel from './MultiPositionPanel.vue'
 import MultiStylePanel from './MultiStylePanel.vue'
+import AIChatPanel from '../AIChatPanel.vue'
 
 const mainStore = useMainStore()
 const { activeElementIdList, activeElementList, activeGroupElementId, toolbarState } = storeToRefs(mainStore)
+
+const aiTab = { label: 'AI', key: ToolbarStates.AI_CHAT }
 
 const elementTabs = [
   { label: '样式', key: ToolbarStates.EL_STYLE },
   { label: '位置', key: ToolbarStates.EL_POSITION },
   { label: '动画', key: ToolbarStates.EL_ANIMATION },
+  aiTab,
 ]
 const slideTabs = [
   { label: '设计', key: ToolbarStates.SLIDE_DESIGN },
   { label: '切换', key: ToolbarStates.SLIDE_ANIMATION },
   { label: '动画', key: ToolbarStates.EL_ANIMATION },
+  aiTab,
 ]
 const multiSelectTabs = [
   { label: '样式', key: ToolbarStates.MULTI_STYLE },
   { label: '位置', key: ToolbarStates.MULTI_POSITION },
+  aiTab,
 ]
 
 // Tab icons (line style SVGs)
@@ -78,6 +85,10 @@ const iconPosition = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24
   h('line', { x1: 12, y1: 2, x2: 12, y2: 22 }),
 ])
 
+const iconAI = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+  h('path', { d: 'M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z' }),
+])
+
 const tabIcons: Record<string, any> = {
   [ToolbarStates.SLIDE_DESIGN]: iconDesign,
   [ToolbarStates.SLIDE_ANIMATION]: iconTransition,
@@ -86,6 +97,7 @@ const tabIcons: Record<string, any> = {
   [ToolbarStates.EL_POSITION]: iconPosition,
   [ToolbarStates.MULTI_STYLE]: iconStyle,
   [ToolbarStates.MULTI_POSITION]: iconPosition,
+  [ToolbarStates.AI_CHAT]: iconAI,
 }
 
 const setToolbarState = (value: ToolbarStates) => {
@@ -105,6 +117,8 @@ const currentTabs = computed(() => {
 })
 
 watch(currentTabs, () => {
+  // Don't auto-switch away from AI tab — it's always available
+  if (toolbarState.value === ToolbarStates.AI_CHAT) return
   const currentTabsValue: ToolbarStates[] = currentTabs.value.map(tab => tab.key)
   if (!currentTabsValue.includes(toolbarState.value)) {
     mainStore.setToolbarState(currentTabsValue[0])
@@ -183,6 +197,19 @@ const currentPanelComponent = computed(() => {
       font-weight: 500;
     }
   }
+
+  &.ai-tab {
+    margin-top: auto;
+    border-top: 1px solid $borderColor;
+
+    .tab-label {
+      background: linear-gradient(90deg, #a78bfa, #60a5fa);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 600;
+    }
+  }
 }
 
 .content {
@@ -191,5 +218,10 @@ const currentPanelComponent = computed(() => {
   padding: 12px;
   font-size: 13px;
   @include overflow-overlay();
+
+  &.no-padding {
+    padding: 0;
+    overflow: hidden;
+  }
 }
 </style>

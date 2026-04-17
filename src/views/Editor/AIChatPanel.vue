@@ -1,8 +1,5 @@
 <template>
-  <div class="ai-chat-panel" :style="{ width: panelWidth + 'px' }">
-    <!-- Resize handle -->
-    <div class="resize-handle" @mousedown="startResize"></div>
-
+  <div class="ai-chat-panel">
     <!-- Header -->
     <div class="panel-header">
       <div class="header-info">
@@ -11,9 +8,6 @@
           <div class="name">子言助手</div>
           <div class="status">在线</div>
         </div>
-      </div>
-      <div class="close-btn" @click="closePanel">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </div>
     </div>
 
@@ -324,30 +318,8 @@ const chatHistory = ref<{ role: string; content: string; tool_calls?: any[]; too
   { role: 'system', content: SYSTEM_PROMPT },
 ])
 
-// Resizable panel width
-const panelWidth = ref(parseInt(localStorage.getItem(STORAGE_KEY_WIDTH) || '320'))
-const isResizing = ref(false)
-
-function startResize(e: MouseEvent) {
-  e.preventDefault()
-  isResizing.value = true
-  const startX = e.clientX
-  const startWidth = panelWidth.value
-
-  const onMouseMove = (ev: MouseEvent) => {
-    const delta = startX - ev.clientX
-    const newWidth = Math.max(260, Math.min(600, startWidth + delta))
-    panelWidth.value = newWidth
-  }
-  const onMouseUp = () => {
-    isResizing.value = false
-    localStorage.setItem(STORAGE_KEY_WIDTH, panelWidth.value.toString())
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-  }
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-}
+// Resizable panel — no longer needed as embedded tab
+const panelWidth = ref(320)
 
 function addMsg(msg: Omit<Message, 'id' | 'timestamp' | '_btnsVisible'>) {
   messages.value.push({
@@ -439,10 +411,6 @@ function clearTool() {
 function updateSetting(key: string, val: string) {
   settings[key] = val
   if (currentTool.value) inputText.value = buildPrompt(currentTool.value, settings)
-}
-
-function closePanel() {
-  mainStore.setAIChatPanelState(false)
 }
 
 async function callLLM(userMessage: string): Promise<void> {
@@ -821,21 +789,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   background: #fff;
-  border-left: 1px solid #e5e7eb;
   font-size: 13px;
   position: relative;
-  min-width: 260px;
-}
-
-.resize-handle {
-  position: absolute;
-  left: -3px;
-  top: 0;
-  width: 6px;
-  height: 100%;
-  cursor: col-resize;
-  z-index: 10;
-  &:hover { background: rgba(139, 92, 246, 0.15); }
 }
 
 .panel-header {
@@ -856,11 +811,6 @@ onMounted(() => {
   }
   .name { font-weight: 500; color: #111; font-size: 13px; }
   .status { font-size: 11px; color: #999; }
-  .close-btn {
-    cursor: pointer; color: #999; padding: 4px;
-    display: flex; align-items: center;
-    &:hover { color: #333; }
-  }
 }
 
 .messages {

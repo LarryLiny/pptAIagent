@@ -12,12 +12,7 @@
           :style="{ height: `${remarkHeight}px` }"
         />
       </div>
-      <div class="layout-content-right-wrapper">
-        <Toolbar class="layout-content-right" />
-        <transition name="fade-slide">
-          <AIChatPanel class="layout-content-ai" v-if="showAIChatPanel" />
-        </transition>
-      </div>
+      <Toolbar class="layout-content-right" />
     </div>
   </div>
 
@@ -70,7 +65,6 @@ import SymbolPanel from './SymbolPanel.vue'
 import MarkupPanel from './MarkupPanel.vue'
 import ImageLibPanel from './ImageLibPanel.vue'
 import AIPPTDialog from './AIPPTDialog.vue'
-import AIChatPanel from './AIChatPanel.vue'
 import Modal from '@/components/Modal.vue'
 
 const mainStore = useMainStore()
@@ -83,7 +77,6 @@ const {
   showMarkupPanel,
   showImageLibPanel,
   showAIPPTDialog,
-  showAIChatPanel,
 } = storeToRefs(mainStore)
 
 const closeExportDialog = () => mainStore.setDialogForExport('')
@@ -119,32 +112,9 @@ usePasteEvent()
     height: 40px;
   }
 }
-.layout-content-right-wrapper {
-  width: 260px;
+.layout-content-right {
+  width: 310px;
   height: 100%;
   flex-shrink: 0;
-  position: relative;
-}
-.layout-content-right {
-  width: 100%;
-  height: 100%;
-}
-.layout-content-ai {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: 100%;
-  z-index: 100;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
-}
-
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.25s ease;
-}
-.fade-slide-enter-from,
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateX(20px);
 }
 </style>

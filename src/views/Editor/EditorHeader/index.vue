@@ -86,9 +86,6 @@
           <div class="arrow-btn"><i-icon-park-outline:down class="arrow" /></div>
         </Popover>
       </div>
-      <div class="menu-item" v-tooltip="'AI助手'" @click="toggleAIChatPanel()">
-        <span class="text ai">AI</span>
-      </div>
       <div class="menu-item" v-tooltip="'导出'" @click="setDialogForExport('pptx')">
         <i-icon-park-outline:download class="icon" />
       </div>
@@ -165,10 +162,6 @@ const openMarkupPanel = () => {
 
 const openAIPPTDialog = () => {
   mainStore.setAIPPTDialogState(true)
-}
-
-const toggleAIChatPanel = () => {
-  mainStore.setAIChatPanelState(!mainStore.showAIChatPanel)
 }
 </script>
 
