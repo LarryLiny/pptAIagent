@@ -82,13 +82,13 @@
         <button class="tool-btn" @click="fileInputRef?.click()" title="上传文件">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
         </button>
-        <div class="tool-dropdown" @mouseenter="toolMenuOpen = true" @mouseleave="toolMenuOpen = false">
+        <div class="tool-dropdown" @mouseenter="openToolMenu" @mouseleave="closeToolMenuDelay">
           <button class="tool-btn with-text">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
             <span>工具</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
-          <div class="dropdown-menu" v-if="toolMenuOpen">
+          <div class="dropdown-menu" v-if="toolMenuOpen" @mouseenter="openToolMenu" @mouseleave="closeToolMenuDelay">
             <div
               v-for="t in toolList"
               :key="t"
@@ -148,6 +148,16 @@
         :placeholder="currentTool ? `输入您的需求，${currentTool}...` : '输入消息...'"
         class="chat-input"
       />
+      <button
+        class="voice-btn"
+        :class="{ recording: isRecording }"
+        @click="toggleVoice"
+        :title="isRecording ? '停止录音' : '语音输入'"
+        v-if="hasSpeechRecognition"
+      >
+        <svg v-if="!isRecording" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
       <button class="send-btn" :disabled="!inputText.trim() || isStreaming" @click="send">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>
@@ -253,6 +263,53 @@ const messagesRef = ref<HTMLElement>()
 const fileInputRef = ref<HTMLInputElement>()
 const currentToolSettings = ref<SettingItem[] | null>(null)
 
+// Tool menu hover with delay to prevent flicker
+let toolMenuTimer: ReturnType<typeof setTimeout> | null = null
+function openToolMenu() {
+  if (toolMenuTimer) { clearTimeout(toolMenuTimer); toolMenuTimer = null }
+  toolMenuOpen.value = true
+}
+function closeToolMenuDelay() {
+  toolMenuTimer = setTimeout(() => { toolMenuOpen.value = false }, 150)
+}
+
+// Voice recognition
+const isRecording = ref(false)
+const hasSpeechRecognition = ref(false)
+let recognition: any = null
+
+function initSpeechRecognition() {
+  const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+  if (!SR) return
+  hasSpeechRecognition.value = true
+  recognition = new SR()
+  recognition.lang = 'zh-CN'
+  recognition.continuous = false
+  recognition.interimResults = true
+  recognition.onresult = (e: any) => {
+    const transcript = Array.from(e.results).map((r: any) => r[0].transcript).join('')
+    inputText.value = transcript
+  }
+  recognition.onend = () => { isRecording.value = false }
+  recognition.onerror = () => { isRecording.value = false }
+}
+
+function toggleVoice() {
+  if (!recognition) return
+  if (isRecording.value) {
+    recognition.stop()
+    isRecording.value = false
+  }
+  else {
+    recognition.start()
+    isRecording.value = true
+  }
+}
+
+// Session persistence keys
+const STORAGE_MESSAGES = 'ai-chat-messages'
+const STORAGE_HISTORY = 'ai-chat-history'
+
 // Chat history for LLM context
 const SYSTEM_PROMPT = `你是"子言"，一个专业的PPT课件制作AI助手。你帮助老师搜索优质素材、修改课件内容、设计课堂活动、生成课堂引入、例题、演讲稿等。
 
@@ -301,6 +358,42 @@ function addMsg(msg: Omit<Message, 'id' | 'timestamp' | '_btnsVisible'>) {
     ...msg,
   })
   scrollToBottom()
+  saveSession()
+}
+
+function saveSession() {
+  try {
+    const serializable = messages.value.map(m => ({
+      id: m.id, type: m.type, content: m.content,
+      timestamp: m.timestamp.toISOString(),
+      buttons: m.buttons, tool: m.tool, _btnsVisible: m._btnsVisible,
+    }))
+    sessionStorage.setItem(STORAGE_MESSAGES, JSON.stringify(serializable))
+    sessionStorage.setItem(STORAGE_HISTORY, JSON.stringify(chatHistory.value))
+  }
+  catch {}
+}
+
+function restoreSession(): boolean {
+  try {
+    const savedMsgs = sessionStorage.getItem(STORAGE_MESSAGES)
+    const savedHistory = sessionStorage.getItem(STORAGE_HISTORY)
+    if (savedMsgs && savedHistory) {
+      const parsed = JSON.parse(savedMsgs)
+      if (parsed.length > 0) {
+        messages.value = parsed.map((m: any) => ({
+          ...m,
+          timestamp: new Date(m.timestamp),
+          _btnsVisible: true,
+        }))
+        chatHistory.value = JSON.parse(savedHistory)
+        scrollToBottom()
+        return true
+      }
+    }
+  }
+  catch {}
+  return false
 }
 
 function scrollToBottom() {
@@ -459,6 +552,7 @@ async function callLLM(userMessage: string): Promise<void> {
     aiMsg._btnsVisible = true
     isStreaming.value = false
     scrollToBottom()
+    saveSession()
   }
 }
 
@@ -510,93 +604,144 @@ async function send() {
 // --- Smart insertion with auto-layout ---
 const SLIDE_W = 1000
 const SLIDE_H = 562
-const PADDING = 60
-const CONTENT_W = SLIDE_W - PADDING * 2
-const CONTENT_H = SLIDE_H - PADDING * 2
-const MAX_CHARS_PER_SLIDE = 600 // rough limit per slide
+const MARGIN_X = 60
+const MARGIN_TOP = 50
+const TITLE_FONT = 28
+const BODY_FONT = 16
+const TITLE_H = 50
+const GAP = 20 // gap between title and body
 
-function textToHtml(text: string, fontSize: number): string {
+// Parse AI content into structured blocks (title + body paragraphs)
+function parseContentBlocks(text: string): { title: string; body: string } {
+  const lines = text.split('\n').filter(l => l.trim())
+  if (lines.length === 0) return { title: '', body: '' }
+
+  // First line is title if it's short and the rest is longer
+  const firstLine = lines[0].replace(/^[#\s*]+/, '').trim()
+  const isFirstLineTitle = firstLine.length < 60 && lines.length > 1
+
+  if (isFirstLineTitle) {
+    return {
+      title: firstLine,
+      body: lines.slice(1).join('\n').trim(),
+    }
+  }
+  return { title: '', body: text.trim() }
+}
+
+function makeHtml(text: string, fontSize: number, color: string, align: string, bold: boolean): string {
+  const bStyle = bold ? 'font-weight: bold;' : ''
   return text.split('\n').map(line =>
-    `<p style="text-align: left;"><span style="font-size: ${fontSize}px; color: #333;">${line || '&nbsp;'}</span></p>`
+    `<p style="text-align: ${align};"><span style="font-size: ${fontSize}px; color: ${color}; ${bStyle}">${line || '&nbsp;'}</span></p>`
   ).join('')
 }
 
-function estimateFontSize(text: string): number {
+function estimateBodyFontSize(text: string): number {
   const len = text.length
-  if (len < 100) return 20
-  if (len < 200) return 18
-  if (len < 400) return 16
-  if (len < 600) return 14
+  if (len < 150) return 18
+  if (len < 300) return 16
+  if (len < 500) return 14
   return 12
 }
 
-function splitTextToPages(text: string): string[] {
-  if (text.length <= MAX_CHARS_PER_SLIDE) return [text]
+function buildSlideElements(text: string): PPTTextElement[] {
+  const { title, body } = parseContentBlocks(text)
+  const elements: PPTTextElement[] = []
+  const contentW = SLIDE_W - MARGIN_X * 2
 
-  const paragraphs = text.split('\n')
-  const pages: string[] = []
-  let current = ''
+  if (title && body) {
+    // Title + Body layout
+    elements.push({
+      type: 'text', id: nanoid(10),
+      left: MARGIN_X, top: MARGIN_TOP,
+      width: contentW, height: TITLE_H,
+      rotate: 0,
+      content: makeHtml(title, TITLE_FONT, '#1a1a2e', 'left', true),
+      defaultFontName: '', defaultColor: '#1a1a2e',
+      lineHeight: 1.3, fill: '',
+      outline: { color: '', width: 0, style: 'solid' },
+    })
 
-  for (const p of paragraphs) {
-    if ((current + '\n' + p).length > MAX_CHARS_PER_SLIDE && current) {
-      pages.push(current.trim())
-      current = p
-    }
-    else {
-      current = current ? current + '\n' + p : p
-    }
+    const bodyTop = MARGIN_TOP + TITLE_H + GAP
+    const bodyH = SLIDE_H - bodyTop - 40
+    const bodyFontSize = estimateBodyFontSize(body)
+
+    elements.push({
+      type: 'text', id: nanoid(10),
+      left: MARGIN_X, top: bodyTop,
+      width: contentW, height: bodyH,
+      rotate: 0,
+      content: makeHtml(body, bodyFontSize, '#333', 'left', false),
+      defaultFontName: '', defaultColor: '#333',
+      lineHeight: 1.6, paragraphSpace: 6, fill: '',
+      outline: { color: '', width: 0, style: 'solid' },
+    })
   }
-  if (current.trim()) pages.push(current.trim())
-  return pages
+  else if (title) {
+    // Title only — centered
+    elements.push({
+      type: 'text', id: nanoid(10),
+      left: MARGIN_X, top: (SLIDE_H - 80) / 2,
+      width: contentW, height: 80,
+      rotate: 0,
+      content: makeHtml(title, 32, '#1a1a2e', 'center', true),
+      defaultFontName: '', defaultColor: '#1a1a2e',
+      lineHeight: 1.3, fill: '',
+      outline: { color: '', width: 0, style: 'solid' },
+    })
+  }
+  else {
+    // Body only
+    const bodyFontSize = estimateBodyFontSize(body)
+    const bodyH = SLIDE_H - MARGIN_TOP * 2
+    elements.push({
+      type: 'text', id: nanoid(10),
+      left: MARGIN_X, top: MARGIN_TOP,
+      width: contentW, height: bodyH,
+      rotate: 0,
+      content: makeHtml(body, bodyFontSize, '#333', 'left', false),
+      defaultFontName: '', defaultColor: '#333',
+      lineHeight: 1.6, paragraphSpace: 6, fill: '',
+      outline: { color: '', width: 0, style: 'solid' },
+    })
+  }
+  return elements
 }
 
 function insertTextToCurrentSlide(text: string) {
-  const fontSize = estimateFontSize(text)
-  const lineCount = text.split('\n').length
-  const estHeight = Math.min(CONTENT_H, Math.max(100, lineCount * fontSize * 1.6 + 20))
-
-  const textEl: PPTTextElement = {
-    type: 'text',
-    id: nanoid(10),
-    width: CONTENT_W,
-    height: estHeight,
-    left: PADDING,
-    top: (SLIDE_H - estHeight) / 2,
-    rotate: 0,
-    content: textToHtml(text, fontSize),
-    defaultFontName: '',
-    defaultColor: '#333',
-    lineHeight: 1.5,
-    fill: '',
-    outline: { color: '', width: 0, style: 'solid' },
+  const elements = buildSlideElements(text)
+  for (const el of elements) {
+    addElementsFromData([el])
   }
-  addElementsFromData([textEl])
 }
 
 function insertTextAsNewSlide(text: string) {
-  const pages = splitTextToPages(text)
-  const slides: Slide[] = pages.map(pageText => {
-    const fontSize = estimateFontSize(pageText)
-    return {
-      id: nanoid(10),
-      elements: [{
-        type: 'text',
-        id: nanoid(10),
-        width: CONTENT_W,
-        height: CONTENT_H,
-        left: PADDING,
-        top: PADDING,
-        rotate: 0,
-        content: textToHtml(pageText, fontSize),
-        defaultFontName: '',
-        defaultColor: '#333',
-        lineHeight: 1.5,
-        fill: '',
-        outline: { color: '', width: 0, style: 'solid' },
-      } as PPTTextElement],
-      background: { type: 'solid', color: '#ffffff' },
+  // Split long text into multiple pages
+  const MAX_CHARS = 600
+  const chunks: string[] = []
+  if (text.length <= MAX_CHARS) {
+    chunks.push(text)
+  }
+  else {
+    const paragraphs = text.split('\n')
+    let current = ''
+    for (const p of paragraphs) {
+      if ((current + '\n' + p).length > MAX_CHARS && current) {
+        chunks.push(current.trim())
+        current = p
+      }
+      else {
+        current = current ? current + '\n' + p : p
+      }
     }
-  })
+    if (current.trim()) chunks.push(current.trim())
+  }
+
+  const slides: Slide[] = chunks.map(chunk => ({
+    id: nanoid(10),
+    elements: buildSlideElements(chunk),
+    background: { type: 'solid', color: '#ffffff' },
+  }))
   addSlidesFromData(slides)
 }
 
@@ -643,9 +788,13 @@ function handleFileUpload(e: Event) {
 }
 
 onMounted(() => {
-  setTimeout(() => {
-    addMsg({ type: 'ai', content: '老师您好，我是子言，我可以帮您\n「搜索优质素材」\n「修改课件内容」\n「设计课堂活动」等等.\n有什么需要帮忙的，直接告诉我即可。' })
-  }, 300)
+  initSpeechRecognition()
+  const restored = restoreSession()
+  if (!restored) {
+    setTimeout(() => {
+      addMsg({ type: 'ai', content: '老师您好，我是子言，我可以帮您\n「搜索优质素材」\n「修改课件内容」\n「设计课堂活动」等等.\n有什么需要帮忙的，直接告诉我即可。' })
+    }, 300)
+  }
 })
 </script>
 
@@ -822,10 +971,24 @@ onMounted(() => {
 .tool-dropdown, .help-dropdown { position: relative; }
 .dropdown-menu {
   position: absolute; bottom: 100%; left: 0;
-  margin-bottom: 4px; width: 150px;
+  margin-bottom: 0; padding-top: 6px;
+  width: 150px; z-index: 10;
+
+  &::before {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 0;
+    width: 100%;
+    height: 6px;
+  }
+}
+.dropdown-menu > .dropdown-item:first-child { border-radius: 6px 6px 0 0; }
+.dropdown-menu > .dropdown-item:last-child { border-radius: 0 0 6px 6px; }
+.dropdown-menu {
   background: #fff; border: 1px solid #e5e7eb;
   border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  overflow: hidden; z-index: 10;
+  overflow: hidden;
 }
 .dropdown-item {
   padding: 6px 10px; font-size: 12px; color: #374151;
@@ -891,6 +1054,22 @@ onMounted(() => {
   justify-content: center; flex-shrink: 0;
   &:hover { background: #7c3aed; }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+.voice-btn {
+  width: 34px; height: 34px; border-radius: 6px;
+  background: #fff; color: #6b7280; border: 1px solid #d1d5db;
+  cursor: pointer; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0;
+  transition: all 0.15s;
+  &:hover { background: #f3f4f6; border-color: #9ca3af; }
+  &.recording {
+    background: #ef4444; color: #fff; border-color: #ef4444;
+    animation: pulse-recording 1.5s infinite;
+  }
+}
+@keyframes pulse-recording {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
 }
 
 .slide-up-enter-active, .slide-up-leave-active { transition: all 0.2s ease; }
