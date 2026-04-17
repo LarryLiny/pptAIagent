@@ -643,10 +643,7 @@ function mdBodyToHtml(md: string, fontSize: number): string {
 
   for (const line of lines) {
     const trimmed = line.trim()
-    if (!trimmed) {
-      htmlParts.push('<p><span style="font-size: 8px;">&nbsp;</span></p>')
-      continue
-    }
+    if (!trimmed) continue
 
     // Sub-heading (## or ###)
     const hMatch = trimmed.match(/^#{2,3}\s+(.+)/)
