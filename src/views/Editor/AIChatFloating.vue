@@ -29,7 +29,7 @@
         >
           <div class="msg-bubble" :class="msg.type">
             <div class="msg-text" v-if="msg.content">
-              <TypeWriter :text="msg.content" :animate="msg.type === 'ai'" :key="msg.id + msg.content.length" @complete="msg._btnsVisible = true" />
+              <TypeWriter :text="msg.content" :animate="msg.type === 'ai' && !msg._btnsVisible" :key="msg.id + msg.content.length" @complete="msg._btnsVisible = true" />
             </div>
             <div class="msg-thinking" v-else-if="msg.type === 'ai'">
               <span class="dot"></span><span class="dot"></span><span class="dot"></span>

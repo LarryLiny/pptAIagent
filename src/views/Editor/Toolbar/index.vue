@@ -86,7 +86,9 @@ const iconPosition = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24
 ])
 
 const iconAI = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
-  h('path', { d: 'M12 2l2.09 6.26L20 10.27l-4.91 3.82L16.18 22 12 18.27 7.82 22l1.09-7.91L4 10.27l5.91-2.01L12 2z' }),
+  h('path', { d: 'M9.937 15.5A2 2 0 008.5 14.063l-6.135-1.582a.5.5 0 010-.962L8.5 9.936A2 2 0 009.937 8.5l1.582-6.135a.5.5 0 01.963 0L14.063 8.5A2 2 0 0015.5 9.937l6.135 1.582a.5.5 0 010 .962L15.5 14.063a2 2 0 00-1.437 1.437l-1.582 6.135a.5.5 0 01-.963 0z' }),
+  h('path', { d: 'M20 3v4' }),
+  h('path', { d: 'M22 5h-4' }),
 ])
 
 const tabIcons: Record<string, any> = {

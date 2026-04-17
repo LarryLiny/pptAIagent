@@ -1,7 +1,36 @@
 <template>
   <div class="ai-sidebar">
-    <!-- Quick input -->
+    <!-- New chat button -->
+    <div class="new-chat" @click="startNewChat">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>新建对话</span>
+    </div>
+
+    <!-- History list -->
+    <div class="history-list">
+      <div class="history-label" v-if="sessions.length">历史记录</div>
+      <div
+        v-for="session in sessions"
+        :key="session.id"
+        class="history-item"
+        :class="{ active: activeSessionId === session.id && floatingOpen }"
+        @click="openChat(session.id)"
+      >
+        <div class="item-icon">
+          <svg v-if="session.elementId" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <div class="item-content">
+          <div class="item-title">{{ session.title }}</div>
+          <div class="item-meta">{{ session.messages.length }} 条消息 · {{ formatDate(session.createdAt) }}</div>
+        </div>
+      </div>
+      <div class="empty-hint" v-if="!sessions.length">暂无对话记录<br/>在下方输入开始对话</div>
+    </div>
+
+    <!-- Quick input at bottom -->
     <div class="quick-input">
+      <div class="input-hint">{{ selectedHint }}</div>
       <div class="input-row">
         <input
           v-model="quickInput"
@@ -22,35 +51,6 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
-      <div class="input-hint">{{ selectedHint }}</div>
-    </div>
-
-    <!-- New chat button -->
-    <div class="new-chat" @click="startNewChat">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      <span>新建对话</span>
-    </div>
-
-    <!-- History list -->
-    <div class="history-list">
-      <div class="history-label">历史记录</div>
-      <div
-        v-for="session in sessions"
-        :key="session.id"
-        class="history-item"
-        :class="{ active: activeSessionId === session.id && floatingOpen }"
-        @click="openChat(session.id)"
-      >
-        <div class="item-icon">
-          <svg v-if="session.elementId" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        </div>
-        <div class="item-content">
-          <div class="item-title">{{ session.title }}</div>
-          <div class="item-meta">{{ session.messages.length }} 条消息 · {{ formatDate(session.createdAt) }}</div>
-        </div>
-      </div>
-      <div class="empty-hint" v-if="!sessions.length">暂无对话记录</div>
     </div>
   </div>
 </template>
@@ -73,8 +73,8 @@ const hasSpeechRecognition = ref(false)
 let recognition: any = null
 
 const selectedHint = computed(() => {
-  if (handleElementId.value) return '已选中元素，AI 将直接操作该元素'
-  return '未选中元素，AI 将生成内容'
+  if (handleElementId.value) return '✦ 已选中元素，AI 将直接操作'
+  return '✦ 输入指令，AI 为你服务'
 })
 
 function formatDate(d: Date) {
@@ -86,11 +86,9 @@ function formatDate(d: Date) {
 }
 
 function sendQuick() {
-  if (!quickInput.trim()) return
+  if (!quickInput.value.trim()) return
   const elementId = handleElementId.value || undefined
   const session = createSession(elementId)
-  // The floating dialog will pick up the session and send the message
-  // We store the pending message in sessionStorage for the floating dialog to consume
   sessionStorage.setItem('ai-pending-msg', JSON.stringify({
     sessionId: session.id,
     text: quickInput.value,
@@ -141,55 +139,17 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.quick-input {
-  padding: 10px;
-  border-bottom: 1px solid #eee;
-
-  .input-row {
-    display: flex; gap: 4px;
-  }
-  .input-field {
-    flex: 1; height: 32px; padding: 0 8px;
-    border: 1px solid #d1d5db; border-radius: 6px;
-    font-size: 12px; outline: none;
-    &:focus { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,0.15); }
-  }
-  .input-hint {
-    font-size: 10px; color: #9ca3af; margin-top: 4px; padding: 0 2px;
-  }
-}
-
-.voice-btn, .send-btn {
-  width: 32px; height: 32px; border-radius: 6px;
-  border: 1px solid #d1d5db; background: #fff;
-  cursor: pointer; display: flex; align-items: center;
-  justify-content: center; flex-shrink: 0; color: #6b7280;
-  &:hover { background: #f3f4f6; border-color: #9ca3af; }
-}
-.send-btn {
-  background: #8b5cf6; color: #fff; border-color: #8b5cf6;
-  &:hover { background: #7c3aed; }
-  &:disabled { opacity: 0.4; cursor: not-allowed; }
-}
-.voice-btn.recording {
-  background: #ef4444; color: #fff; border-color: #ef4444;
-  animation: pulse-rec 1.5s infinite;
-}
-@keyframes pulse-rec {
-  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
-  50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
-}
-
 .new-chat {
   display: flex; align-items: center; gap: 6px;
-  padding: 8px 12px; margin: 6px 10px;
+  padding: 8px 12px; margin: 8px 10px 4px;
   border: 1px dashed #d1d5db; border-radius: 6px;
   color: #6b7280; cursor: pointer; font-size: 12px;
+  flex-shrink: 0;
   &:hover { background: #f9fafb; border-color: #9ca3af; color: #374151; }
 }
 
 .history-list {
-  flex: 1; overflow-y: auto; padding: 0 10px 10px;
+  flex: 1; overflow-y: auto; padding: 0 10px;
 
   .history-label {
     font-size: 10px; color: #9ca3af; padding: 6px 2px 4px;
@@ -219,6 +179,46 @@ onMounted(() => {
 }
 
 .empty-hint {
-  text-align: center; color: #9ca3af; padding: 20px 0; font-size: 11px;
+  text-align: center; color: #9ca3af; padding: 40px 0; font-size: 11px; line-height: 1.8;
+}
+
+.quick-input {
+  padding: 10px;
+  border-top: 1px solid #eee;
+  flex-shrink: 0;
+
+  .input-hint {
+    font-size: 10px; color: #9ca3af; margin-bottom: 6px; padding: 0 2px;
+  }
+  .input-row {
+    display: flex; gap: 4px;
+  }
+  .input-field {
+    flex: 1; height: 32px; padding: 0 8px;
+    border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 12px; outline: none;
+    &:focus { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,0.15); }
+  }
+}
+
+.voice-btn, .send-btn {
+  width: 32px; height: 32px; border-radius: 6px;
+  border: 1px solid #d1d5db; background: #fff;
+  cursor: pointer; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; color: #6b7280;
+  &:hover { background: #f3f4f6; border-color: #9ca3af; }
+}
+.send-btn {
+  background: #8b5cf6; color: #fff; border-color: #8b5cf6;
+  &:hover { background: #7c3aed; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+.voice-btn.recording {
+  background: #ef4444; color: #fff; border-color: #ef4444;
+  animation: pulse-rec 1.5s infinite;
+}
+@keyframes pulse-rec {
+  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+  50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
 }
 </style>
