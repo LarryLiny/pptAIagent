@@ -95,7 +95,8 @@ import { useMainStore, useSlidesStore } from '@/store'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import TypeWriter from './TypeWriter.vue'
-import { describeCurrentSlide, pptTools, executeTool } from './aiPptTools'
+import { describeCurrentSlide, pptTools, executeTool, SYSTEM_PROMPT } from './aiPptTools'
+import { tryLocalCommand } from './aiLocalCommands'
 import {
   floatingOpen, activeSessionId, sessions,
   getActiveSession, addMessageToSession, saveSessions,
@@ -205,14 +206,10 @@ function buildChatHistory() {
   const session = activeSession.value
   if (!session) return []
 
-  const systemPrompt = `你是"子言"，一个专业的PPT课件制作AI助手。你帮助老师搜索优质素材、修改课件内容、设计课堂活动、生成课堂引入、例题、演讲稿等。
-你可以通过工具直接操作PPT：修改元素位置/尺寸/内容/样式、添加文字和图片、新建页面、删除元素、修改背景和备注。
-画布尺寸固定为 1000×562 像素(16:9)。
-当用户要求调整格式、排版、布局时，请使用工具直接操作，操作完成后简短告知用户做了什么。
-回复要简洁。`
-
-  const msgs: any[] = [{ role: 'system', content: systemPrompt }]
-  for (const m of session.messages) {
+  const msgs: any[] = [{ role: 'system', content: SYSTEM_PROMPT }]
+  // Only include last 10 messages to save tokens
+  const recent = session.messages.slice(-10)
+  for (const m of recent) {
     msgs.push({ role: m.type === 'user' ? 'user' : 'assistant', content: m.content })
   }
   return msgs
@@ -223,12 +220,34 @@ async function send() {
   const txt = inputText.value
   const sessionId = activeSession.value.id
   const tool = currentTool.value
+  const selectedElId = mainStore.handleElementId || undefined
 
   const userContent = tool ? `[工具: ${tool}] ${txt}` : txt
   addMessageToSession(sessionId, { type: 'user', content: userContent, tool: tool || undefined })
   inputText.value = ''
   currentTool.value = null
   scrollToBottom()
+
+  // --- Try local command first (zero latency, zero tokens) ---
+  if (!tool && selectedElId) {
+    const localResult = tryLocalCommand(txt)
+    if (localResult.handled) {
+      const session = sessions.value.find(s => s.id === sessionId)
+      if (session) {
+        session.messages.push({
+          id: Date.now().toString() + Math.random().toString(36).slice(2),
+          type: 'ai',
+          content: localResult.message,
+          timestamp: new Date(),
+          _btnsVisible: true,
+          buttons: [{ label: '撤销', action: 'undo' }],
+        })
+        saveSessions()
+        scrollToBottom()
+      }
+      return
+    }
+  }
 
   // Add thinking placeholder
   const aiMsg = {
@@ -245,7 +264,7 @@ async function send() {
   scrollToBottom()
 
   try {
-    const slideContext = describeCurrentSlide()
+    const slideContext = describeCurrentSlide(selectedElId)
     const chatHistory = buildChatHistory()
     // Replace last user msg with enriched version
     chatHistory[chatHistory.length - 1] = {

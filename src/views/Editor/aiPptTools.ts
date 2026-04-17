@@ -2,44 +2,86 @@ import { nanoid } from 'nanoid'
 import { useSlidesStore } from '@/store'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
-import type { Slide, PPTTextElement, PPTImageElement, PPTElement } from '@/types/slides'
+import type { Slide, PPTTextElement, PPTImageElement, PPTShapeElement, PPTElement } from '@/types/slides'
 
-// Serialize current slide elements for LLM context
-export function describeCurrentSlide(): string {
+// System prompt for LLM — focused on element manipulation
+export const SYSTEM_PROMPT = `你是"子言"，PPT课件AI助手。你通过工具直接操作PPT元素。
+
+## 画布
+- 尺寸: 1000×562px (16:9)
+- 坐标原点: 左上角
+
+## 核心规则
+1. 用户说"字号改成30"→ 调用update_element修改content中的font-size
+2. 用户说"颜色改红色"→ 修改content中的color为#ff0000
+3. 用户说"加粗"→ 在content的span中添加font-weight:bold
+4. 用户说"居中"→ 修改content中的text-align:center
+5. 用户说"移到右边"→ 修改left值
+6. 用户说"背景改蓝色"→ 调用update_slide_background
+
+## 文本元素的content格式
+文本内容是HTML字符串，格式如:
+<p style="text-align: left;"><span style="font-size: 18px; color: #333;">文字内容</span></p>
+
+修改字号: 替换font-size的值
+修改颜色: 替换color的值
+加粗: 添加font-weight: bold;
+修改对齐: 替换text-align的值
+
+## 重要
+- 修改文本样式时，必须在content的HTML中修改对应的CSS属性
+- 用→标记的是当前选中的元素，优先操作它
+- 回复要简洁，操作完说一句话即可`
+
+// Serialize current slide elements for LLM context — rich detail for selected element
+export function describeCurrentSlide(selectedElementId?: string): string {
   const slidesStore = useSlidesStore()
   const slide = slidesStore.currentSlide
   if (!slide) return '当前没有选中的幻灯片。'
 
   const idx = slidesStore.slideIndex
   const total = slidesStore.slides.length
-  const lines: string[] = [`当前是第${idx + 1}/${total}页，画布尺寸: 1000×562px`]
+  const lines: string[] = [`第${idx + 1}/${total}页 画布:1000×562px`]
 
   if (slide.background) {
-    if (slide.background.type === 'solid') lines.push(`背景: 纯色 ${slide.background.color}`)
-    else if (slide.background.type === 'image') lines.push('背景: 图片')
-    else if (slide.background.type === 'gradient') lines.push('背景: 渐变')
+    if (slide.background.type === 'solid') lines.push(`背景:${slide.background.color}`)
   }
-  if (slide.remark) lines.push(`备注: "${slide.remark.slice(0, 80)}${slide.remark.length > 80 ? '...' : ''}"`)
 
   for (const el of slide.elements) {
-    const pos = `位置(${Math.round(el.left)},${Math.round(el.top)}) 尺寸(${Math.round(el.width)}×${Math.round(el.height)})`
+    const isSelected = el.id === selectedElementId
+    const prefix = isSelected ? '→ ' : '  '
+    const pos = `(${Math.round(el.left)},${Math.round(el.top)}) ${Math.round(el.width)}×${Math.round(el.height)}`
+
     if (el.type === 'text') {
-      // Extract plain text from HTML
       const tmp = document.createElement('div')
       tmp.innerHTML = el.content
-      const text = tmp.textContent?.slice(0, 60) || ''
-      const suffix = (tmp.textContent?.length || 0) > 60 ? '...' : ''
-      lines.push(`[文本 id="${el.id}"] ${pos} 内容="${text}${suffix}"`)
+      const text = tmp.textContent?.slice(0, 50) || ''
+      // Extract current font-size from HTML
+      const fsMatch = el.content.match(/font-size:\s*(\d+)px/)
+      const fs = fsMatch ? fsMatch[1] + 'px' : ''
+      const colorMatch = el.content.match(/(?<![background-])color:\s*(#[0-9a-fA-F]+)/)
+      const color = colorMatch ? colorMatch[1] : ''
+      const bold = /font-weight:\s*bold/.test(el.content) ? '加粗' : ''
+      const alignMatch = el.content.match(/text-align:\s*(\w+)/)
+      const align = alignMatch ? alignMatch[1] : ''
+
+      let detail = `[文本 id="${el.id}"] ${pos}`
+      if (isSelected) {
+        detail += ` 字号:${fs} 颜色:${color} ${bold} 对齐:${align}`
+        detail += ` 行高:${el.lineHeight || 1.5} 填充:${el.fill || '无'}`
+      }
+      detail += ` "${text}${text.length >= 50 ? '...' : ''}"`
+      lines.push(prefix + detail)
     }
     else if (el.type === 'image') {
-      lines.push(`[图片 id="${el.id}"] ${pos} src="${el.src.slice(0, 40)}..."`)
+      lines.push(`${prefix}[图片 id="${el.id}"] ${pos}`)
     }
     else if (el.type === 'shape') {
-      const text = el.text?.content ? '(含文字)' : ''
-      lines.push(`[形状 id="${el.id}"] ${pos} ${text}`)
+      const hasText = (el as PPTShapeElement).text?.content ? '(含文字)' : ''
+      lines.push(`${prefix}[形状 id="${el.id}"] ${pos} ${hasText}`)
     }
     else {
-      lines.push(`[${el.type} id="${el.id}"] ${pos}`)
+      lines.push(`${prefix}[${el.type} id="${el.id}"] ${pos}`)
     }
   }
   return lines.join('\n')
