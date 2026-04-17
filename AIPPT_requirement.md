@@ -2,12 +2,12 @@
 
 <!--
 @meta
-version: 1.1.0
-last-updated: 2026-04-17
+version: 1.2.0
+last-updated: 2026-04-17 15:00:00
 last-full-rewrite: 2026-04-17
-update-mode: full-rewrite
-source-hash: ai-assistant-files
-analyzed-files: src/views/Editor/AIChatFloating.vue, src/views/Editor/AISidebarPanel.vue, src/views/Editor/aiChatStore.ts, src/views/Editor/aiPptTools.ts, src/views/Editor/TypeWriter.vue, src/views/Editor/Toolbar/index.vue, src/types/toolbar.ts
+update-mode: incremental
+source-hash: ai-assistant-files-v2
+analyzed-files: src/views/Editor/AIChatFloating.vue, src/views/Editor/AISidebarPanel.vue, src/views/Editor/aiChatStore.ts, src/views/Editor/aiPptTools.ts, src/views/Editor/aiLocalCommands.ts, src/views/Editor/TypeWriter.vue, src/views/Editor/Toolbar/index.vue, src/types/toolbar.ts
 @/meta
 -->
 
@@ -108,28 +108,29 @@ AI tab 被选中时，侧边栏显示以下内容（从上到下）：
 
 ## 第 3 章：对话交互
 
-### 3.1 消息发送流程
+### 3.1 消息发送流程 [Updated 2026-04-17]
 
 ```
 用户输入消息（文字或语音）
   │
-  ├── 从侧边栏快捷输入 → 自动创建会话 → 打开悬浮框 → 发送
+  ├── 从侧边栏底部输入 → 创建会话 → 打开悬浮框 → 发送
   └── 从悬浮框输入 → 直接发送
         │
         ↓
-系统自动注入当前幻灯片上下文
-  │
-  ↓
-调用 LLM API（携带 Function Calling 工具定义）
-  │
-  ├── LLM 返回 tool_calls
-  │     → 执行工具操作（直接修改 PPT）
-  │     → 再次调用 LLM 获取操作总结（流式）
-  │     → 显示总结 + "撤销"按钮
-  │
-  └── LLM 返回纯文本
-        → 直接显示（非流式，一次性返回）
-        → 显示"插入当前页" + "新建页插入"按钮
+  ── 第一层：本地指令解析（0 token，<50ms）──
+  正则匹配：字号/颜色/加粗/对齐/尺寸/位置/背景等
+        │
+        ├── 匹配成功 → 直接执行 → 回复"已调整" + 撤销按钮
+        │
+        └── 匹配失败 → 进入第二层
+              │
+              ↓
+  ── 第二层：LLM Function Calling ──
+  注入幻灯片上下文（选中元素用→标记）
+  调用 LLM（携带 7 个工具定义）
+        │
+        ├── tool_calls → 执行工具 → 流式总结 → 撤销按钮
+        └── 纯文本 → 直接显示 → 插入按钮
 ```
 
 ### 3.2 消息气泡
@@ -195,17 +196,35 @@ AI 消息的 Markdown 渲染规则：
 
 ## 第 4 章：AI 能力
 
-### 4.1 上下文注入
+### 4.0 本地指令解析器 [Added 2026-04-17]
 
-每次用户发送消息时，系统自动在用户消息前注入当前幻灯片的结构化描述：
+选中元素后，以下指令由本地正则匹配直接执行，不调用 LLM：
+
+| 指令类型 | 示例 | 匹配模式 |
+|----------|------|----------|
+| 字号 | "字号改成30"、"字号大一点" | `/字号[改调设]?[成整为到]*\s*(\d+)/` |
+| 文字颜色 | "颜色改红色"、"改成#ff0000" | 30+ 中英文颜色名 + hex |
+| 加粗/斜体 | "加粗"、"取消加粗"、"斜体" | 关键词匹配 |
+| 对齐 | "居中"、"左对齐"、"右对齐" | 关键词匹配 |
+| 尺寸 | "宽度改成500"、"放大"、"缩小" | 数值提取 / ×1.2 / ×0.8 |
+| 位置 | "水平居中"、"垂直居中" | 计算居中坐标 |
+| 背景色 | "背景改蓝色" | 颜色解析 |
+| 填充/透明度/行高 | "透明度改成50"、"行高1.8" | 数值提取 |
+| 删除 | "删除"、"移除" | 关键词匹配 |
+
+本地执行后立即回复操作结果 + 撤销按钮。未匹配的指令进入 LLM 处理。
+
+### 4.1 上下文注入 [Updated 2026-04-17]
+
+每次用户发送消息时，系统自动在用户消息前注入当前幻灯片的结构化描述。选中元素用 `→` 标记并附带详细属性：
 
 ```
 [当前幻灯片]
-当前是第3/15页，画布尺寸: 1000×562px
-背景: 纯色 #ffffff
-[文本 id="abc123"] 位置(60,50) 尺寸(880×52) 内容="Section A: Reading and Thinking"
-[图片 id="def456"] 位置(100,120) 尺寸(400×300) src="data:image/png;base64..."
-[形状 id="ghi789"] 位置(600,200) 尺寸(300×200) (含文字)
+第3/15页 画布:1000×562px
+背景:#ffffff
+  [文本 id="abc123"] (60,50) 880×52 "Section A: Reading..."
+→ [文本 id="def456"] (60,120) 880×200 字号:18px 颜色:#333 对齐:left 行高:1.5 "正文内容..."
+  [图片 id="ghi789"] (100,350) 400×180
 
 [用户请求]
 把标题字号改大一些
@@ -445,3 +464,4 @@ System Prompt 要点：
 |------|------|------|----------|
 | 2026-04-17 | full-rewrite | 1.0.0 | 初始生成（含编辑器基座） |
 | 2026-04-17 | full-rewrite | 1.1.0 | 聚焦 AI 助手，移除编辑器基座描述 |
+| 2026-04-17 | incremental | 1.2.0 | 新增本地指令解析器、改进上下文注入、侧边栏布局调整 |
