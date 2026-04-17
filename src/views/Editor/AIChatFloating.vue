@@ -67,10 +67,19 @@
         <input
           v-model="inputText"
           @keydown.enter="send"
-          placeholder="输入消息..."
+          :placeholder="currentTool ? `输入需求，${currentTool}...` : '输入消息...'"
           class="input-field"
           ref="inputRef"
         />
+        <button
+          class="mic-btn"
+          :class="{ recording: isRecording }"
+          @click="toggleVoice"
+          v-if="hasSpeechRecognition"
+        >
+          <svg v-if="!isRecording" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        </button>
         <button class="send-btn" :disabled="!inputText.trim() || isStreaming" @click="send">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
@@ -114,6 +123,41 @@ let toolMenuTimer: ReturnType<typeof setTimeout> | null = null
 
 const toolList = ['生成课堂引入', '搜索背景知识', '例题生成', '互动环节设计', '总结要点', '生成演讲稿']
 
+const TOOL_PROMPTS: Record<string, string> = {
+  '生成课堂引入': '请结合情境导入方式，设计一段适中难度的课堂引入',
+  '搜索背景知识': '搜索简单难度的背景知识',
+  '例题生成': '生成2题选择题，难度基础',
+  '互动环节设计': '设计一个小组讨论互动环节，时长10分钟',
+  '总结要点': '帮我总结全部课件的知识要点，格式：要点列表',
+  '生成演讲稿': '请生成一份正式风格、5分钟的演讲稿',
+}
+
+// Voice recognition
+const isRecording = ref(false)
+const hasSpeechRecognition = ref(false)
+let recognition: any = null
+
+function initSpeechRecognition() {
+  const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+  if (!SR) return
+  hasSpeechRecognition.value = true
+  recognition = new SR()
+  recognition.lang = 'zh-CN'
+  recognition.continuous = false
+  recognition.interimResults = true
+  recognition.onresult = (e: any) => {
+    inputText.value = Array.from(e.results).map((r: any) => r[0].transcript).join('')
+  }
+  recognition.onend = () => { isRecording.value = false }
+  recognition.onerror = () => { isRecording.value = false }
+}
+
+function toggleVoice() {
+  if (!recognition) return
+  if (isRecording.value) { recognition.stop(); isRecording.value = false }
+  else { recognition.start(); isRecording.value = true }
+}
+
 const activeSession = computed(() => getActiveSession())
 
 // Dragging
@@ -146,6 +190,8 @@ function closeToolMenuDelay() {
 function selectTool(t: string) {
   currentTool.value = t
   toolMenuOpen.value = false
+  inputText.value = TOOL_PROMPTS[t] || ''
+  nextTick(() => inputRef.value?.focus())
 }
 
 function scrollToBottom() {
@@ -367,8 +413,8 @@ watch(floatingOpen, (open) => {
 })
 
 onMounted(() => {
-  // Position near right side
   pos.value.x = Math.max(100, window.innerWidth - 520)
+  initSpeechRecognition()
 })
 </script>
 
@@ -380,7 +426,7 @@ onMounted(() => {
 .floating-chat {
   pointer-events: all;
   position: absolute;
-  width: 400px; max-height: 560px;
+  width: 400px; max-height: 680px;
   background: #fff; border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
   display: flex; flex-direction: column;
@@ -405,7 +451,7 @@ onMounted(() => {
 }
 
 .float-messages {
-  flex: 1; overflow-y: auto; padding: 12px; min-height: 120px; max-height: 360px;
+  flex: 1; overflow-y: auto; padding: 12px; min-height: 120px; max-height: 480px;
 
   .welcome-msg {
     text-align: center; padding: 30px 0;
@@ -471,10 +517,16 @@ onMounted(() => {
 
 .tool-dropdown-wrap { position: relative; }
 .tool-menu {
-  position: absolute; bottom: 100%; left: 0; margin-bottom: 4px;
+  position: absolute; bottom: calc(100% + 4px); left: 0;
   width: 140px; background: #fff; border: 1px solid #e5e7eb;
   border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   overflow: hidden; z-index: 10;
+  padding-bottom: 0;
+
+  &::after {
+    content: ''; position: absolute; bottom: -6px; left: 0;
+    width: 100%; height: 6px;
+  }
 }
 .tool-item {
   padding: 6px 10px; font-size: 12px; color: #374151; cursor: pointer;
@@ -498,6 +550,21 @@ onMounted(() => {
     justify-content: center; flex-shrink: 0;
     &:hover { background: #7c3aed; }
     &:disabled { opacity: 0.4; cursor: not-allowed; }
+  }
+  .mic-btn {
+    width: 34px; height: 34px; border-radius: 6px;
+    background: #fff; color: #6b7280; border: 1px solid #d1d5db;
+    cursor: pointer; display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0;
+    &:hover { background: #f3f4f6; }
+    &.recording {
+      background: #ef4444; color: #fff; border-color: #ef4444;
+      animation: mic-pulse 1.5s infinite;
+    }
+  }
+  @keyframes mic-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+    50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
   }
 }
 </style>
