@@ -118,6 +118,7 @@ import {
   getActiveSession, addMessageToSession, saveSessions,
   closeFloating as closeFloat,
 } from './aiChatStore'
+import { extractTemplate, buildTemplatedSlide } from './aiSlideTemplate'
 import type { Slide, PPTTextElement } from '@/types/slides'
 
 const LLM_API_URL = import.meta.env.DEV ? '/llm/v1/chat/completions' : 'https://modelproxy.unipus.cn/v1/chat/completions'
@@ -417,29 +418,14 @@ function mdBodyToHtml(md: string, fontSize: number): string {
   }).join('')
 }
 
-function buildSlideElements(content: string): PPTTextElement[] {
+// Parse content into title + body
+function parseContent(content: string): { title: string; body: string } {
   const lines = content.split('\n').filter(l => l.trim())
   const firstLine = lines[0] || ''
   const hMatch = firstLine.match(/^#{1,2}\s+(.+)/)
   const title = hMatch ? hMatch[1].replace(/\*\*/g, '') : (firstLine.length < 50 && lines.length > 1 ? firstLine.replace(/^[#*\s]+/, '') : '')
   const body = title ? lines.slice(1).join('\n').trim() : content.trim()
-  const els: PPTTextElement[] = []
-  const W = 880, MX = 60, MT = 50
-
-  if (title) {
-    els.push({ type: 'text', id: nanoid(10), left: MX, top: MT, width: W, height: 52, rotate: 0,
-      content: `<p style="text-align:left;"><span style="font-size:28px;font-weight:bold;color:#1a1a2e;">${title}</span></p>`,
-      defaultFontName: '', defaultColor: '#1a1a2e', lineHeight: 1.3, fill: '', outline: { color: '', width: 0, style: 'solid' } })
-  }
-  if (body) {
-    const fs = body.length < 200 ? 16 : body.length < 400 ? 15 : 14
-    const top = title ? MT + 68 : MT
-    const h = 562 - top - 36
-    els.push({ type: 'text', id: nanoid(10), left: MX, top, width: W, height: h, rotate: 0,
-      content: mdBodyToHtml(body, fs),
-      defaultFontName: '', defaultColor: '#333', lineHeight: 1.6, paragraphSpace: 4, fill: '', outline: { color: '', width: 0, style: 'solid' } })
-  }
-  return els
+  return { title, body }
 }
 
 function insertImage(src: string) {
@@ -480,17 +466,22 @@ function insertImage(src: string) {
 
 function handleButton(action: string, content: string) {
   if (action === 'undo') {
-    // Trigger PPTist undo via keyboard shortcut simulation
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))
     return
   }
+
+  const template = extractTemplate()
+  const { title, body } = parseContent(content)
+
   if (action === 'insert') {
-    const els = buildSlideElements(content)
-    for (const el of els) addElementsFromData([el])
+    // Insert into current slide using template styles
+    const slide = buildTemplatedSlide(title, body, template)
+    for (const el of slide.elements) addElementsFromData([el])
   }
   else if (action === 'agree') {
-    const els = buildSlideElements(content)
-    addSlidesFromData([{ id: nanoid(10), elements: els, background: { type: 'solid', color: '#fff' } }])
+    // Create new slide using template
+    const slide = buildTemplatedSlide(title, body, template)
+    addSlidesFromData([slide])
   }
 }
 
