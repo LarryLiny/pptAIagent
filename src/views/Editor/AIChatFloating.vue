@@ -263,17 +263,19 @@ async function send() {
     }
   }
 
-  // Add thinking placeholder
-  const aiMsg = {
-    id: Date.now().toString() + Math.random().toString(36).slice(2),
-    type: 'ai' as const,
+  // Add thinking placeholder — use reactive for proper Vue tracking
+  const aiMsgId = Date.now().toString() + Math.random().toString(36).slice(2)
+  const session = sessions.value.find(s => s.id === sessionId)
+  if (!session) return
+  session.messages.push({
+    id: aiMsgId,
+    type: 'ai',
     content: '',
     timestamp: new Date(),
     _btnsVisible: false,
-  }
-  const session = sessions.value.find(s => s.id === sessionId)
-  if (!session) return
-  session.messages.push(aiMsg)
+  })
+  // Get reactive reference to the message in the array
+  const aiMsg = session.messages[session.messages.length - 1]
   isStreaming.value = true
   scrollToBottom()
 
