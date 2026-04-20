@@ -51,6 +51,16 @@
         </div>
       </div>
 
+      <!-- Tool settings panel -->
+      <div class="tool-settings" v-if="showSettings && currentToolSettings">
+        <div v-for="s in currentToolSettings" :key="s.key" class="setting-row">
+          <span class="setting-label">{{ s.label }}</span>
+          <div class="setting-opts">
+            <button v-for="o in s.options" :key="o" class="setting-opt" :class="{ active: toolSettings[s.key] === o }" @click="updateToolSetting(s.key, o)">{{ o }}</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Tools bar -->
       <div class="float-tools">
         <div class="tool-dropdown-wrap" @mouseenter="openToolMenu" @mouseleave="closeToolMenuDelay">
@@ -68,28 +78,12 @@
         <div class="tool-tag" v-if="currentTool">
           <span v-html="TOOL_ICONS[currentTool]"></span>
           {{ currentTool }}
-          <button class="settings-toggle" @click="showSettings = !showSettings">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-          </button>
           <span class="tag-x" @click="clearTool">×</span>
+          <span class="tag-settings" @click="showSettings = !showSettings">⚙</span>
         </div>
         <div class="bound-hint" v-if="activeSession?.elementId">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
           绑定元素
-        </div>
-      </div>
-
-      <!-- Settings panel -->
-      <div class="float-settings" v-if="showSettings && currentTool && TOOL_SETTINGS[currentTool]">
-        <div v-for="s in TOOL_SETTINGS[currentTool]" :key="s.key" class="setting-row">
-          <span class="setting-label">{{ s.label }}</span>
-          <div class="setting-opts">
-            <button
-              v-for="o in s.options" :key="o"
-              class="setting-opt" :class="{ active: toolSettings[s.key] === o }"
-              @click="updateToolSetting(s.key, o)"
-            >{{ o }}</button>
-          </div>
         </div>
       </div>
 
@@ -120,7 +114,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore } from '@/store'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
@@ -207,24 +201,8 @@ const TOOL_SETTINGS: Record<string, SettingItem[]> = {
 }
 
 const showSettings = ref(false)
-const toolSettings = reactive<Record<string, string>>({})
-
-function buildPrompt(tool: string, s: Record<string, string>): string {
-  switch (tool) {
-    case '生成课堂引入': return `请结合${s.introType || '情境导入'}方式，设计一段${s.difficulty || '适中'}难度的课堂引入`
-    case '搜索背景知识': return `搜索${s.difficulty || '简单'}难度的背景知识，来源：${s.sourceType || '外研社素材库'}`
-    case '例题生成': return `生成${s.count || '2题'}${s.qtype || '选择题'}，难度${s.difficulty || '基础'}`
-    case '互动环节设计': return `设计一个${s.form || '小组讨论'}互动环节，时长${s.duration || '10分钟'}`
-    case '总结要点': return `帮我总结${s.scope || '全部课件'}的知识要点，格式：${s.format || '要点列表'}`
-    case '生成演讲稿': return `请生成一份${s.style || '正式'}风格、${s.duration || '5分钟'}的演讲稿`
-    default: return ''
-  }
-}
-
-function updateToolSetting(key: string, val: string) {
-  toolSettings[key] = val
-  if (currentTool.value) inputText.value = buildPrompt(currentTool.value, toolSettings)
-}
+const toolSettings = ref<Record<string, string>>({})
+const currentToolSettings = computed(() => currentTool.value ? TOOL_SETTINGS[currentTool.value] || null : null)
 
 // Voice recognition
 const isRecording = ref(false)
@@ -284,20 +262,40 @@ function closeToolMenuDelay() {
 function selectTool(t: string) {
   currentTool.value = t
   toolMenuOpen.value = false
-  showSettings.value = true
-  // Initialize default settings
-  Object.keys(toolSettings).forEach(k => delete toolSettings[k])
-  const defs = TOOL_SETTINGS[t]
-  if (defs) defs.forEach(s => { toolSettings[s.key] = s.options[0] })
-  inputText.value = buildPrompt(t, toolSettings)
+  showSettings.value = false
+  // Init default settings
+  const defs: Record<string, string> = {}
+  const settings = TOOL_SETTINGS[t]
+  if (settings) settings.forEach(s => { defs[s.key] = s.options[0] })
+  toolSettings.value = defs
+  inputText.value = buildToolPrompt(t, defs)
   nextTick(() => inputRef.value?.focus())
 }
 
 function clearTool() {
   currentTool.value = null
   showSettings.value = false
-  Object.keys(toolSettings).forEach(k => delete toolSettings[k])
+  toolSettings.value = {}
   inputText.value = ''
+}
+
+function updateToolSetting(key: string, val: string) {
+  toolSettings.value[key] = val
+  if (currentTool.value) {
+    inputText.value = buildToolPrompt(currentTool.value, toolSettings.value)
+  }
+}
+
+function buildToolPrompt(tool: string, s: Record<string, string>): string {
+  switch (tool) {
+    case '生成课堂引入': return `请结合${s.introType || '情境导入'}方式，设计一段${s.difficulty || '适中'}难度的课堂引入`
+    case '搜索背景知识': return `搜索${s.difficulty || '简单'}难度的背景知识，来源：${s.sourceType || '外研社素材库'}`
+    case '例题生成': return `生成${s.count || '2题'}${s.qtype || '选择题'}，难度${s.difficulty || '基础'}`
+    case '互动环节设计': return `设计一个${s.form || '小组讨论'}互动环节，时长${s.duration || '10分钟'}`
+    case '总结要点': return `帮我总结${s.scope || '全部课件'}的知识要点，格式：${s.format || '要点列表'}`
+    case '生成演讲稿': return `请生成一份${s.style || '正式'}风格、${s.duration || '5分钟'}的演讲稿`
+    default: return ''
+  }
 }
 
 function scrollToBottom() {
@@ -415,19 +413,19 @@ async function send() {
         }
       }
       else {
-        // Execute non-image tool calls and collect results
-        const toolResults: { id: string; result: string }[] = []
+        // Execute non-image tool calls
         for (const tc of toolCalls) {
           let args: Record<string, any> = {}
           try { args = JSON.parse(tc.function.arguments) } catch {}
-          const result = executeTool(tc.function.name, args)
-          toolResults.push({ id: tc.id, result })
+          executeTool(tc.function.name, args)
         }
 
-        // Get summary using cached results (don't re-execute!)
+        // Get summary
         const summaryMsgs = [...chatHistory, choice.message]
-        for (const tr of toolResults) {
-          summaryMsgs.push({ role: 'tool', content: tr.result, tool_call_id: tr.id })
+        for (const tc of toolCalls) {
+          let args: Record<string, any> = {}
+          try { args = JSON.parse(tc.function.arguments) } catch {}
+          summaryMsgs.push({ role: 'tool', content: executeTool(tc.function.name, args), tool_call_id: tc.id })
         }
 
         const summaryResp = await fetch(LLM_API_URL, {
@@ -552,9 +550,10 @@ function handleButton(action: string, content: string) {
   const { title, body } = parseContent(content)
 
   if (action === 'insert') {
-    // Insert into current slide using template styles
+    // Insert only text elements into current slide (not decorative shapes)
     const slide = buildTemplatedSlide(title, body, template)
-    for (const el of slide.elements) addElementsFromData([el])
+    const textEls = slide.elements.filter(el => el.type === 'text')
+    for (const el of textEls) addElementsFromData([el])
   }
   else if (action === 'agree') {
     // Create new slide using template
@@ -691,6 +690,25 @@ onMounted(() => {
   }
 }
 
+.tool-settings {
+  padding: 8px 14px; border-top: 1px solid #f0f0f0;
+  background: #fafafa; flex-shrink: 0;
+
+  .setting-row {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+    &:last-child { margin-bottom: 0; }
+  }
+  .setting-label { font-size: 10px; color: #6b7280; white-space: nowrap; min-width: 45px; }
+  .setting-opts { display: flex; flex-wrap: wrap; gap: 4px; }
+  .setting-opt {
+    padding: 2px 8px; border-radius: 10px; font-size: 10px;
+    border: 1px solid #d1d5db; background: #fff; color: #4b5563;
+    cursor: pointer; transition: all 0.15s;
+    &:hover { border-color: #a78bfa; color: #7c3aed; }
+    &.active { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
+  }
+}
+
 .float-tools {
   display: flex; align-items: center; gap: 6px;
   padding: 6px 14px; border-top: 1px solid #f0f0f0;
@@ -706,12 +724,8 @@ onMounted(() => {
     display: flex; align-items: center; gap: 3px;
     padding: 2px 8px; background: #f5f3ff; border: 1px solid #ddd6fe;
     border-radius: 10px; font-size: 10px; color: #7c3aed;
-    .settings-toggle {
-      display: flex; align-items: center; padding: 1px; margin-left: 2px;
-      background: none; border: none; color: #7c3aed; cursor: pointer; opacity: 0.6;
-      &:hover { opacity: 1; }
-    }
     .tag-x { cursor: pointer; &:hover { color: #5b21b6; } }
+    .tag-settings { cursor: pointer; margin-left: 2px; opacity: 0.7; &:hover { opacity: 1; } }
   }
   .bound-hint {
     display: flex; align-items: center; gap: 3px;
@@ -737,32 +751,6 @@ onMounted(() => {
   display: flex; align-items: center; gap: 6px;
   &:hover { background: #f3f4f6; }
   .tool-item-icon { display: flex; align-items: center; color: #9ca3af; }
-}
-
-.float-settings {
-  padding: 8px 14px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafafa;
-  flex-shrink: 0;
-  max-height: 140px;
-  overflow-y: auto;
-
-  .setting-row {
-    display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px;
-    &:last-child { margin-bottom: 0; }
-  }
-  .setting-label {
-    font-size: 10px; color: #6b7280; white-space: nowrap;
-    padding-top: 4px; min-width: 40px;
-  }
-  .setting-opts { display: flex; flex-wrap: wrap; gap: 4px; }
-  .setting-opt {
-    padding: 3px 8px; border-radius: 10px; font-size: 10px;
-    border: 1px solid #d1d5db; background: #fff; color: #4b5563;
-    cursor: pointer; transition: all 0.12s;
-    &:hover { border-color: #a78bfa; color: #7c3aed; }
-    &.active { background: #8b5cf6; color: #fff; border-color: #8b5cf6; }
-  }
 }
 
 .float-input {
