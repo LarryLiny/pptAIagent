@@ -118,181 +118,178 @@ export function tryLocalCommand(input: string): LocalCommandResult {
   const el = getSelectedElement()
   const textEl = getSelectedTextElement()
 
+  const results: string[] = []
+  // Track current content for chained text modifications
+  let currentContent = textEl?.content || ''
+  let contentChanged = false
+  let propsChanged: Record<string, any> = {}
+
+  // Helper: mark content as changed
+  const updateContent = (newContent: string) => {
+    currentContent = newContent
+    contentChanged = true
+  }
+
   // --- Font size ---
-  // "字号改成30" "字号30" "font size 30" "字号调整为24px" "字号大一点" "字号小一点"
   const fontSizeMatch = text.match(/字号[改调设]?[成整为到]*\s*(\d+)/) || text.match(/font.?size\s*[:=]?\s*(\d+)/i)
   if (fontSizeMatch && textEl) {
     const size = parseInt(fontSizeMatch[1])
     if (size >= 8 && size <= 200) {
-      const newContent = changeHtmlFontSize(textEl.content, size)
-      slidesStore.updateElement({ id: textEl.id, props: { content: newContent } as any })
-      addHistorySnapshot()
-      return { handled: true, message: `已将字号调整为 ${size}px` }
+      updateContent(changeHtmlFontSize(currentContent, size))
+      results.push(`字号→${size}px`)
     }
   }
-  if (/字号.*(大|增大|放大|调大)/.test(text) && textEl) {
-    const currentSize = parseInt(textEl.content.match(/font-size:\s*(\d+)/)?.[1] || '16')
-    const newSize = Math.min(200, currentSize + 4)
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlFontSize(textEl.content, newSize) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: `已将字号从 ${currentSize}px 增大到 ${newSize}px` }
+  else if (/字号.*(大|增大|放大|调大)/.test(text) && textEl) {
+    const cur = parseInt(currentContent.match(/font-size:\s*(\d+)/)?.[1] || '16')
+    updateContent(changeHtmlFontSize(currentContent, Math.min(200, cur + 4)))
+    results.push(`字号增大`)
   }
-  if (/字号.*(小|减小|缩小|调小)/.test(text) && textEl) {
-    const currentSize = parseInt(textEl.content.match(/font-size:\s*(\d+)/)?.[1] || '16')
-    const newSize = Math.max(8, currentSize - 4)
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlFontSize(textEl.content, newSize) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: `已将字号从 ${currentSize}px 减小到 ${newSize}px` }
+  else if (/字号.*(小|减小|缩小|调小)/.test(text) && textEl) {
+    const cur = parseInt(currentContent.match(/font-size:\s*(\d+)/)?.[1] || '16')
+    updateContent(changeHtmlFontSize(currentContent, Math.max(8, cur - 4)))
+    results.push(`字号减小`)
   }
 
   // --- Text color ---
-  // "颜色改成红色" "文字颜色改为#ff0000" "字体颜色红色"
-  const colorCmd = text.match(/(?:文字|字体|文本)?颜色[改调设]?[成整为到]*\s*(.+)/)
-  if (colorCmd && textEl) {
-    const color = resolveColor(colorCmd[1])
-    if (color) {
-      slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlColor(textEl.content, color) } as any })
-      addHistorySnapshot()
-      return { handled: true, message: `已将文字颜色改为 ${color}` }
-    }
-  }
-  // "改成红色" (without 颜色 prefix, if selected text element)
-  if (/[改调设][成整为到]/.test(text) && textEl) {
-    const color = resolveColor(text)
-    if (color && !fontSizeMatch && !/字号|大小|宽|高|位置|背景/.test(text)) {
-      slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlColor(textEl.content, color) } as any })
-      addHistorySnapshot()
-      return { handled: true, message: `已将文字颜色改为 ${color}` }
+  const colorPatterns = [
+    text.match(/(?:文字|字体|文本|字)?颜?色?[改调设]?[成整为到]*\s*(红色?|蓝色?|绿色?|黄色?|橙色?|紫色?|粉色?|黑色?|白色?|灰色?|棕色?|深蓝|浅蓝|深绿|深灰|浅灰|#[0-9a-fA-F]{3,8})/),
+    text.match(/(?:改|变|换)[成为到]?\s*(红色?|蓝色?|绿色?|黄色?|橙色?|紫色?|粉色?|黑色?|白色?|灰色?|#[0-9a-fA-F]{3,8})/)
+  ]
+  for (const m of colorPatterns) {
+    if (m && textEl && !results.some(r => r.includes('颜色'))) {
+      const color = resolveColor(m[1])
+      if (color) {
+        updateContent(changeHtmlColor(currentContent, color))
+        results.push(`颜色→${color}`)
+        break
+      }
     }
   }
 
   // --- Bold ---
-  if (/加粗|变粗|bold/.test(text) && textEl) {
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlBold(textEl.content, true) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已加粗' }
+  if (/取消加粗|去掉加粗|不加粗/.test(text) && textEl) {
+    updateContent(changeHtmlBold(currentContent, false))
+    results.push('取消加粗')
   }
-  if (/取消加粗|去掉加粗|不加粗|unbold/.test(text) && textEl) {
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlBold(textEl.content, false) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已取消加粗' }
+  else if (/加粗|变粗|bold/.test(text) && textEl) {
+    updateContent(changeHtmlBold(currentContent, true))
+    results.push('加粗')
   }
 
   // --- Italic ---
-  if (/斜体|倾斜|italic/.test(text) && !/取消|去掉/.test(text) && textEl) {
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlItalic(textEl.content, true) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已设为斜体' }
-  }
   if (/取消斜体|去掉斜体/.test(text) && textEl) {
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlItalic(textEl.content, false) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已取消斜体' }
+    updateContent(changeHtmlItalic(currentContent, false))
+    results.push('取消斜体')
+  }
+  else if ((/斜体|倾斜|italic/.test(text)) && textEl) {
+    updateContent(changeHtmlItalic(currentContent, true))
+    results.push('斜体')
   }
 
   // --- Alignment ---
-  if (/居中|center/.test(text) && !/垂直/.test(text) && textEl) {
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlAlign(textEl.content, 'center') } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已居中对齐' }
+  if (/居中对齐|文字居中|center/.test(text) && textEl) {
+    updateContent(changeHtmlAlign(currentContent, 'center'))
+    results.push('居中')
   }
-  if (/左对齐|靠左/.test(text) && textEl) {
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlAlign(textEl.content, 'left') } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已左对齐' }
+  else if (/左对齐|靠左/.test(text) && textEl) {
+    updateContent(changeHtmlAlign(currentContent, 'left'))
+    results.push('左对齐')
   }
-  if (/右对齐|靠右/.test(text) && textEl) {
-    slidesStore.updateElement({ id: textEl.id, props: { content: changeHtmlAlign(textEl.content, 'right') } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已右对齐' }
+  else if (/右对齐|靠右/.test(text) && textEl) {
+    updateContent(changeHtmlAlign(currentContent, 'right'))
+    results.push('右对齐')
   }
 
   // --- Element size ---
   const widthMatch = text.match(/宽度?[改调设]?[成整为到]*\s*(\d+)/)
   if (widthMatch && el) {
-    slidesStore.updateElement({ id: el.id, props: { width: parseInt(widthMatch[1]) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: `已将宽度调整为 ${widthMatch[1]}px` }
+    propsChanged.width = parseInt(widthMatch[1])
+    results.push(`宽度→${widthMatch[1]}px`)
   }
   const heightMatch = text.match(/高度?[改调设]?[成整为到]*\s*(\d+)/)
   if (heightMatch && el) {
-    slidesStore.updateElement({ id: el.id, props: { height: parseInt(heightMatch[1]) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: `已将高度调整为 ${heightMatch[1]}px` }
+    propsChanged.height = parseInt(heightMatch[1])
+    results.push(`高度→${heightMatch[1]}px`)
+  }
+  if (/放大|变大|enlarge/.test(text) && el && !widthMatch) {
+    propsChanged.width = Math.round(el.width * 1.2)
+    propsChanged.height = Math.round(el.height * 1.2)
+    results.push('放大20%')
+  }
+  if (/缩小|变小|shrink/.test(text) && el && !widthMatch) {
+    propsChanged.width = Math.round(el.width * 0.8)
+    propsChanged.height = Math.round(el.height * 0.8)
+    results.push('缩小20%')
   }
 
-  // "放大" "缩小"
-  if (/放大|变大|enlarge/.test(text) && el) {
-    slidesStore.updateElement({ id: el.id, props: { width: Math.round(el.width * 1.2), height: Math.round(el.height * 1.2) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已放大 20%' }
-  }
-  if (/缩小|变小|shrink/.test(text) && el) {
-    slidesStore.updateElement({ id: el.id, props: { width: Math.round(el.width * 0.8), height: Math.round(el.height * 0.8) } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已缩小 20%' }
-  }
-
-  // --- Position ---
-  if (/居中|水平居中/.test(text) && !/文字|对齐/.test(text) && el) {
-    slidesStore.updateElement({ id: el.id, props: { left: (1000 - el.width) / 2 } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已水平居中' }
-  }
-  if (/垂直居中/.test(text) && el) {
-    slidesStore.updateElement({ id: el.id, props: { top: (562 - el.height) / 2 } as any })
-    addHistorySnapshot()
-    return { handled: true, message: '已垂直居中' }
-  }
-
-  // --- Background color ---
-  const bgMatch = text.match(/背景[色颜]?[改调设]?[成整为到]*\s*(.+)/)
-  if (bgMatch) {
-    const color = resolveColor(bgMatch[1])
-    if (color) {
-      slidesStore.updateSlide({ background: { type: 'solid', color } })
-      addHistorySnapshot()
-      return { handled: true, message: `已将背景色改为 ${color}` }
-    }
-  }
-
-  // --- Fill color (element background) ---
-  const fillMatch = text.match(/(?:填充|元素背景)[色颜]?[改调设]?[成整为到]*\s*(.+)/)
-  if (fillMatch && el && (el.type === 'text' || el.type === 'shape')) {
-    const color = resolveColor(fillMatch[1])
-    if (color) {
-      slidesStore.updateElement({ id: el.id, props: { fill: color } as any })
-      addHistorySnapshot()
-      return { handled: true, message: `已将填充色改为 ${color}` }
-    }
+  // --- Line height ---
+  const lhMatch = text.match(/行[高距间][改调设]?[成整为到]*\s*([\d.]+)/)
+  if (lhMatch && textEl) {
+    propsChanged.lineHeight = parseFloat(lhMatch[1])
+    results.push(`行高→${lhMatch[1]}`)
   }
 
   // --- Opacity ---
   const opacityMatch = text.match(/(?:透明度|不透明度)[改调设]?[成整为到]*\s*([\d.]+)/)
   if (opacityMatch && el) {
     let val = parseFloat(opacityMatch[1])
-    if (val > 1) val = val / 100 // "透明度改成50" → 0.5
-    slidesStore.updateElement({ id: el.id, props: { opacity: val } as any })
-    addHistorySnapshot()
-    return { handled: true, message: `已将透明度调整为 ${val}` }
+    if (val > 1) val = val / 100
+    propsChanged.opacity = val
+    results.push(`透明度→${val}`)
   }
 
-  // --- Line height ---
-  const lhMatch = text.match(/行[高距间][改调设]?[成整为到]*\s*([\d.]+)/)
-  if (lhMatch && textEl) {
-    const lh = parseFloat(lhMatch[1])
-    slidesStore.updateElement({ id: textEl.id, props: { lineHeight: lh } as any })
-    addHistorySnapshot()
-    return { handled: true, message: `已将行高调整为 ${lh}` }
+  // --- Background color (page level, not element) ---
+  const bgMatch = text.match(/背景[色颜]?[改调设]?[成整为到]*\s*(.+)/)
+  if (bgMatch) {
+    const color = resolveColor(bgMatch[1])
+    if (color) {
+      slidesStore.updateSlide({ background: { type: 'solid', color } })
+      results.push(`背景→${color}`)
+    }
   }
 
-  // --- Delete ---
-  if (/删除|移除|去掉这个|remove|delete/.test(text) && el) {
+  // --- Fill color ---
+  const fillMatch = text.match(/(?:填充|元素背景)[色颜]?[改调设]?[成整为到]*\s*(.+)/)
+  if (fillMatch && el && (el.type === 'text' || el.type === 'shape')) {
+    const color = resolveColor(fillMatch[1])
+    if (color) {
+      propsChanged.fill = color
+      results.push(`填充→${color}`)
+    }
+  }
+
+  // --- Delete (exclusive — don't combine with other ops) ---
+  if (/删除|移除|去掉这个|remove|delete/.test(text) && el && results.length === 0) {
     slidesStore.deleteElement(el.id)
     addHistorySnapshot()
     return { handled: true, message: '已删除该元素' }
   }
 
-  // Not handled locally
-  return { handled: false, message: '' }
+  // --- Position (element level centering) ---
+  if (/水平居中/.test(text) && el && !textEl) {
+    propsChanged.left = (1000 - el.width) / 2
+    results.push('水平居中')
+  }
+  if (/垂直居中/.test(text) && el) {
+    propsChanged.top = (562 - el.height) / 2
+    results.push('垂直居中')
+  }
+
+  // --- Execute all collected changes ---
+  if (results.length === 0) {
+    return { handled: false, message: '' }
+  }
+
+  // Apply content changes
+  if (contentChanged && textEl) {
+    propsChanged.content = currentContent
+  }
+
+  // Apply all property changes in one update
+  if (Object.keys(propsChanged).length > 0 && el) {
+    slidesStore.updateElement({ id: el.id, props: propsChanged as any })
+  }
+
+  addHistorySnapshot()
+  return { handled: true, message: `已完成：${results.join('、')}` }
 }
