@@ -28,6 +28,7 @@
           :class="{ 'msg-user': msg.type === 'user', 'msg-ai': msg.type === 'ai' }"
         >
           <div class="msg-bubble" :class="msg.type">
+            <span class="msg-tool-icon" v-if="msg.tool" v-html="TOOL_ICONS[msg.tool]"></span>
             <div class="msg-text" v-if="msg.content">
               <TypeWriter :text="msg.content" :animate="msg.type === 'ai' && !msg._btnsVisible" :key="msg.id + msg.content.length" @complete="msg._btnsVisible = true" />
             </div>
@@ -49,14 +50,18 @@
             工具
           </button>
           <div class="tool-menu" v-if="toolMenuOpen" @mouseenter="openToolMenu" @mouseleave="closeToolMenuDelay">
-            <div v-for="t in toolList" :key="t" class="tool-item" @click="selectTool(t)">{{ t }}</div>
+            <div v-for="t in toolList" :key="t" class="tool-item" @click="selectTool(t)">
+              <span class="tool-item-icon" v-html="TOOL_ICONS[t]"></span>
+              {{ t }}
+            </div>
           </div>
         </div>
         <div class="tool-tag" v-if="currentTool">
+          <span v-html="TOOL_ICONS[currentTool]"></span>
           {{ currentTool }}
           <span class="tag-x" @click="currentTool = null">×</span>
         </div>
-        <div class="bound-hint" v-if="activeSession.elementId">
+        <div class="bound-hint" v-if="activeSession?.elementId">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
           绑定元素
         </div>
@@ -123,6 +128,15 @@ const currentTool = ref<string | null>(null)
 let toolMenuTimer: ReturnType<typeof setTimeout> | null = null
 
 const toolList = ['生成课堂引入', '搜索背景知识', '例题生成', '互动环节设计', '总结要点', '生成演讲稿']
+
+const TOOL_ICONS: Record<string, string> = {
+  '生成课堂引入': '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg>',
+  '搜索背景知识': '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  '例题生成': '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+  '互动环节设计': '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
+  '总结要点': '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+  '生成演讲稿': '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>',
+}
 
 const TOOL_PROMPTS: Record<string, string> = {
   '生成课堂引入': '请结合情境导入方式，设计一段适中难度的课堂引入',
@@ -222,7 +236,7 @@ async function send() {
   const tool = currentTool.value
   const selectedElId = mainStore.handleElementId || undefined
 
-  const userContent = tool ? `[工具: ${tool}] ${txt}` : txt
+  const userContent = txt
   addMessageToSession(sessionId, { type: 'user', content: userContent, tool: tool || undefined })
   inputText.value = ''
   currentTool.value = null
@@ -486,6 +500,9 @@ onMounted(() => {
     &.user { background: #3b82f6; color: #fff; font-size: 12.5px; }
     &.ai { background: #f3f4f6; color: #111; font-size: 12.5px; }
   }
+  .msg-tool-icon {
+    display: inline-flex; vertical-align: middle; margin-right: 4px; opacity: 0.7;
+  }
   .msg-text { line-height: 1.5; }
   .msg-thinking {
     display: flex; gap: 4px; padding: 4px 0;
@@ -549,7 +566,9 @@ onMounted(() => {
 }
 .tool-item {
   padding: 6px 10px; font-size: 12px; color: #374151; cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
   &:hover { background: #f3f4f6; }
+  .tool-item-icon { display: flex; align-items: center; color: #9ca3af; }
 }
 
 .float-input {

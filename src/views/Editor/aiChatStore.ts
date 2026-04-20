@@ -41,7 +41,7 @@ export function createSession(elementId?: string): ChatSession {
   sessions.value.unshift(session)
   activeSessionId.value = session.id
   floatingOpen.value = true
-  saveSessions()
+  // Don't save yet — only save when first message is added
   return session
 }
 

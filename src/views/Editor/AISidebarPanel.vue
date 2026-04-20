@@ -1,16 +1,16 @@
 <template>
   <div class="ai-sidebar">
     <!-- New chat button -->
-    <div class="new-chat" @click="startNewChat">
+    <button class="new-chat-btn" @click="startNewChat">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      <span>新建对话</span>
-    </div>
+      新建 AI 对话
+    </button>
 
     <!-- History list -->
     <div class="history-list">
-      <div class="history-label" v-if="sessions.length">历史记录</div>
+      <div class="history-label" v-if="visibleSessions.length">历史记录</div>
       <div
-        v-for="session in sessions"
+        v-for="session in visibleSessions"
         :key="session.id"
         class="history-item"
         :class="{ active: activeSessionId === session.id && floatingOpen }"
@@ -25,57 +25,51 @@
           <div class="item-meta">{{ session.messages.length }} 条消息 · {{ formatDate(session.createdAt) }}</div>
         </div>
       </div>
-      <div class="empty-hint" v-if="!sessions.length">暂无对话记录<br/>在下方输入开始对话</div>
+      <div class="empty-hint" v-if="!visibleSessions.length">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <div>暂无对话记录</div>
+        <div>点击上方按钮开始</div>
+      </div>
     </div>
 
-    <!-- Quick input at bottom -->
-    <div class="quick-input">
-      <div class="input-hint">{{ selectedHint }}</div>
-      <div class="input-row">
-        <input
-          v-model="quickInput"
-          @keydown.enter="sendQuick"
-          placeholder="给 AI 发指令..."
-          class="input-field"
-        />
-        <button
-          class="voice-btn"
-          :class="{ recording: isRecording }"
-          @click="toggleVoice"
-          v-if="hasSpeechRecognition"
-        >
-          <svg v-if="!isRecording" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-        </button>
-        <button class="send-btn" :disabled="!quickInput.trim()" @click="sendQuick">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
+    <!-- Tips bar at bottom -->
+    <div class="tips-bar">
+      <div class="tips-inner" ref="tipsInnerRef">
+        <span class="tips-text" ref="tipsTextRef">{{ currentTip }}</span>
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useMainStore } from '@/store'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import {
   sessions, activeSessionId, floatingOpen,
   createSession, openSession, restoreSessions,
 } from './aiChatStore'
 
-const mainStore = useMainStore()
-const { handleElementId } = storeToRefs(mainStore)
+const TIPS = [
+  'Tips：选中文字后跟我说"字号改成30"，立刻生效',
+  'Tips：想用时事做课堂引入？不妨问问 AI',
+  'Tips：让 AI 帮你设计课堂互动活动吧！',
+  'Tips：选中元素后说"改成红色"，AI 秒改',
+  'Tips：AI 可以帮你生成演讲稿并插入备注',
+  'Tips：说"背景改成深蓝色"，一句话换背景',
+  'Tips：让 AI 帮你出几道选择题，难度随你定',
+  'Tips：选中文字说"加粗居中"，排版一步到位',
+  'Tips：AI 能帮你总结课件要点，生成知识清单',
+  'Tips：试试语音输入，动动嘴就能操作 PPT',
+]
 
-const quickInput = ref('')
-const isRecording = ref(false)
-const hasSpeechRecognition = ref(false)
-let recognition: any = null
+const currentTipIndex = ref(0)
+const currentTip = computed(() => TIPS[currentTipIndex.value])
+const tipsInnerRef = ref<HTMLElement>()
+const tipsTextRef = ref<HTMLElement>()
+let tipTimer: ReturnType<typeof setInterval> | null = null
+let scrollTimer: ReturnType<typeof setTimeout> | null = null
 
-const selectedHint = computed(() => {
-  if (handleElementId.value) return '✦ 已选中元素，AI 将直接操作'
-  return '✦ 输入指令，AI 为你服务'
-})
+// Only show sessions that have messages
+const visibleSessions = computed(() => sessions.value.filter(s => s.messages.length > 0))
 
 function formatDate(d: Date) {
   const now = new Date()
@@ -83,17 +77,6 @@ function formatDate(d: Date) {
     return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
   }
   return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-}
-
-function sendQuick() {
-  if (!quickInput.value.trim()) return
-  const elementId = handleElementId.value || undefined
-  const session = createSession(elementId)
-  sessionStorage.setItem('ai-pending-msg', JSON.stringify({
-    sessionId: session.id,
-    text: quickInput.value,
-  }))
-  quickInput.value = ''
 }
 
 function startNewChat() {
@@ -104,30 +87,45 @@ function openChat(id: string) {
   openSession(id)
 }
 
-function initSpeechRecognition() {
-  const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
-  if (!SR) return
-  hasSpeechRecognition.value = true
-  recognition = new SR()
-  recognition.lang = 'zh-CN'
-  recognition.continuous = false
-  recognition.interimResults = true
-  recognition.onresult = (e: any) => {
-    quickInput.value = Array.from(e.results).map((r: any) => r[0].transcript).join('')
-  }
-  recognition.onend = () => { isRecording.value = false }
-  recognition.onerror = () => { isRecording.value = false }
+function startTipsCycle() {
+  tipTimer = setInterval(() => {
+    currentTipIndex.value = (currentTipIndex.value + 1) % TIPS.length
+    // Check if text overflows after switching
+    if (scrollTimer) clearTimeout(scrollTimer)
+    resetScroll()
+    scrollTimer = setTimeout(checkAndScroll, 4000)
+  }, 7000)
+  // Initial check
+  setTimeout(checkAndScroll, 4000)
 }
 
-function toggleVoice() {
-  if (!recognition) return
-  if (isRecording.value) { recognition.stop(); isRecording.value = false }
-  else { recognition.start(); isRecording.value = true }
+function resetScroll() {
+  if (tipsTextRef.value) {
+    tipsTextRef.value.style.transform = 'translateX(0)'
+    tipsTextRef.value.style.transition = 'none'
+  }
+}
+
+function checkAndScroll() {
+  const inner = tipsInnerRef.value
+  const text = tipsTextRef.value
+  if (!inner || !text) return
+  const overflow = text.scrollWidth - inner.clientWidth
+  if (overflow > 0) {
+    const duration = overflow / 30 // 30px per second
+    text.style.transition = `transform ${duration}s linear`
+    text.style.transform = `translateX(-${overflow}px)`
+  }
 }
 
 onMounted(() => {
   restoreSessions()
-  initSpeechRecognition()
+  startTipsCycle()
+})
+
+onUnmounted(() => {
+  if (tipTimer) clearInterval(tipTimer)
+  if (scrollTimer) clearTimeout(scrollTimer)
 })
 </script>
 
@@ -139,13 +137,15 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.new-chat {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 12px; margin: 8px 10px 4px;
-  border: 1px dashed #d1d5db; border-radius: 6px;
-  color: #6b7280; cursor: pointer; font-size: 12px;
-  flex-shrink: 0;
-  &:hover { background: #f9fafb; border-color: #9ca3af; color: #374151; }
+.new-chat-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 12px; margin: 10px 10px 6px;
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+  color: #fff; border: none; border-radius: 8px;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  flex-shrink: 0; transition: all 0.15s;
+  &:hover { background: linear-gradient(135deg, #7c3aed, #4f46e5); box-shadow: 0 2px 8px rgba(139,92,246,0.3); }
+  &:active { transform: scale(0.98); }
 }
 
 .history-list {
@@ -179,46 +179,26 @@ onMounted(() => {
 }
 
 .empty-hint {
-  text-align: center; color: #9ca3af; padding: 40px 0; font-size: 11px; line-height: 1.8;
+  text-align: center; color: #9ca3af; padding: 40px 0; font-size: 11px; line-height: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
 
-.quick-input {
-  padding: 10px;
-  border-top: 1px solid #eee;
+.tips-bar {
   flex-shrink: 0;
+  padding: 8px 10px;
+  background: #fefce8;
+  border-top: 1px solid #fde68a;
+  overflow: hidden;
 
-  .input-hint {
-    font-size: 10px; color: #9ca3af; margin-bottom: 6px; padding: 0 2px;
+  .tips-inner {
+    overflow: hidden;
+    white-space: nowrap;
   }
-  .input-row {
-    display: flex; gap: 4px;
+  .tips-text {
+    display: inline-block;
+    font-size: 11px;
+    color: #6b7280;
+    white-space: nowrap;
   }
-  .input-field {
-    flex: 1; height: 32px; padding: 0 8px;
-    border: 1px solid #d1d5db; border-radius: 6px;
-    font-size: 12px; outline: none;
-    &:focus { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,0.15); }
-  }
-}
-
-.voice-btn, .send-btn {
-  width: 32px; height: 32px; border-radius: 6px;
-  border: 1px solid #d1d5db; background: #fff;
-  cursor: pointer; display: flex; align-items: center;
-  justify-content: center; flex-shrink: 0; color: #6b7280;
-  &:hover { background: #f3f4f6; border-color: #9ca3af; }
-}
-.send-btn {
-  background: #8b5cf6; color: #fff; border-color: #8b5cf6;
-  &:hover { background: #7c3aed; }
-  &:disabled { opacity: 0.4; cursor: not-allowed; }
-}
-.voice-btn.recording {
-  background: #ef4444; color: #fff; border-color: #ef4444;
-  animation: pulse-rec 1.5s infinite;
-}
-@keyframes pulse-rec {
-  0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
-  50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
 }
 </style>
