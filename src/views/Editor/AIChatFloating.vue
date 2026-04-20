@@ -106,7 +106,7 @@ import type { Slide, PPTTextElement } from '@/types/slides'
 
 const LLM_API_URL = import.meta.env.DEV ? '/llm/v1/chat/completions' : 'https://modelproxy.unipus.cn/v1/chat/completions'
 const LLM_API_KEY = 'sk-CUBymvpjvH47EGAca1tygKVCtIGBgvVFJwKWTfJxyv8yGK7A'
-const LLM_MODEL = 'gpt-4o-mini'
+const LLM_MODEL = 'qwen-plus'
 
 const mainStore = useMainStore()
 const slidesStore = useSlidesStore()
