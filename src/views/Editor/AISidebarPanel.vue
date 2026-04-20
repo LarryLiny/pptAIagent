@@ -33,7 +33,7 @@
     </div>
 
     <!-- Tips bar at bottom -->
-    <div class="tips-bar">
+    <div class="tips-bar" @dblclick="nextTip">
       <div class="tips-inner" ref="tipsInnerRef">
         <span class="tips-text" ref="tipsTextRef">{{ currentTip }}</span>
       </div>
@@ -88,15 +88,15 @@ function openChat(id: string) {
 }
 
 function startTipsCycle() {
-  tipTimer = setInterval(() => {
-    currentTipIndex.value = (currentTipIndex.value + 1) % TIPS.length
-    // Check if text overflows after switching
-    if (scrollTimer) clearTimeout(scrollTimer)
-    resetScroll()
-    scrollTimer = setTimeout(checkAndScroll, 4000)
-  }, 7000)
-  // Initial check
+  tipTimer = setInterval(nextTip, 7000)
   setTimeout(checkAndScroll, 4000)
+}
+
+function nextTip() {
+  currentTipIndex.value = (currentTipIndex.value + 1) % TIPS.length
+  if (scrollTimer) clearTimeout(scrollTimer)
+  resetScroll()
+  scrollTimer = setTimeout(checkAndScroll, 4000)
 }
 
 function resetScroll() {
@@ -189,6 +189,8 @@ onUnmounted(() => {
   background: #fefce8;
   border-top: 1px solid #fde68a;
   overflow: hidden;
+  cursor: pointer;
+  user-select: none;
 
   .tips-inner {
     overflow: hidden;
