@@ -35,6 +35,15 @@
             <div class="msg-thinking" v-else-if="msg.type === 'ai'">
               <span class="dot"></span><span class="dot"></span><span class="dot"></span>
             </div>
+            <!-- Image grid for search results -->
+            <div class="img-grid" v-if="msg.images?.length">
+              <div class="img-card" v-for="img in msg.images" :key="img.src" @click="insertImage(img.src)">
+                <img :src="img.src" loading="lazy" />
+                <div class="img-overlay">
+                  <span>插入</span>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="msg-actions" v-if="msg._btnsVisible && msg.buttons?.length">
             <button v-for="(btn, i) in msg.buttons" :key="i" class="action-btn" @click="handleButton(btn.action, msg.content)">{{ btn.label }}</button>
@@ -99,8 +108,10 @@ import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore } from '@/store'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import useCreateElement from '@/hooks/useCreateElement'
 import TypeWriter from './TypeWriter.vue'
-import { describeCurrentSlide, pptTools, executeTool, SYSTEM_PROMPT } from './aiPptTools'
+import { describeCurrentSlide, pptTools, executeTool, SYSTEM_PROMPT, searchImages } from './aiPptTools'
+import type { SearchedImage } from './aiPptTools'
 import { tryLocalCommand } from './aiLocalCommands'
 import {
   floatingOpen, activeSessionId, sessions,
@@ -307,33 +318,52 @@ async function send() {
 
     if (choice?.message?.tool_calls?.length) {
       const toolCalls = choice.message.tool_calls
-      for (const tc of toolCalls) {
+
+      // Check if any tool call is search_images
+      const searchCall = toolCalls.find((tc: any) => tc.function.name === 'search_images')
+      if (searchCall) {
         let args: Record<string, any> = {}
-        try { args = JSON.parse(tc.function.arguments) } catch {}
-        executeTool(tc.function.name, args)
-      }
-
-      // Get summary
-      const summaryMsgs = [...chatHistory, choice.message]
-      for (const tc of toolCalls) {
-        let args: Record<string, any> = {}
-        try { args = JSON.parse(tc.function.arguments) } catch {}
-        summaryMsgs.push({ role: 'tool', content: executeTool(tc.function.name, args), tool_call_id: tc.id })
-      }
-
-      const summaryResp = await fetch(LLM_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LLM_API_KEY}` },
-        body: JSON.stringify({ model: LLM_MODEL, messages: summaryMsgs, stream: true }),
-      })
-
-      if (summaryResp.ok) {
-        await streamInto(summaryResp, aiMsg)
+        try { args = JSON.parse(searchCall.function.arguments) } catch {}
+        const images = await searchImages(args.query || '', args.orientation || 'landscape')
+        if (images.length) {
+          aiMsg.content = `为您找到以下图片（关键词: ${args.query}），点击选择插入：`
+          aiMsg.images = images
+          aiMsg.buttons = []
+        }
+        else {
+          aiMsg.content = `未找到相关图片，请换个关键词试试。`
+        }
       }
       else {
-        aiMsg.content = '已按照您的要求调整。'
+        // Execute non-image tool calls
+        for (const tc of toolCalls) {
+          let args: Record<string, any> = {}
+          try { args = JSON.parse(tc.function.arguments) } catch {}
+          executeTool(tc.function.name, args)
+        }
+
+        // Get summary
+        const summaryMsgs = [...chatHistory, choice.message]
+        for (const tc of toolCalls) {
+          let args: Record<string, any> = {}
+          try { args = JSON.parse(tc.function.arguments) } catch {}
+          summaryMsgs.push({ role: 'tool', content: executeTool(tc.function.name, args), tool_call_id: tc.id })
+        }
+
+        const summaryResp = await fetch(LLM_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LLM_API_KEY}` },
+          body: JSON.stringify({ model: LLM_MODEL, messages: summaryMsgs, stream: true }),
+        })
+
+        if (summaryResp.ok) {
+          await streamInto(summaryResp, aiMsg)
+        }
+        else {
+          aiMsg.content = '已按照您的要求调整。'
+        }
+        aiMsg.buttons = [{ label: '撤销', action: 'undo' }]
       }
-      aiMsg.buttons = [{ label: '撤销', action: 'undo' }]
     }
     else {
       aiMsg.content = choice?.message?.content || ''
@@ -409,6 +439,24 @@ function buildSlideElements(content: string): PPTTextElement[] {
       defaultFontName: '', defaultColor: '#333', lineHeight: 1.6, paragraphSpace: 4, fill: '', outline: { color: '', width: 0, style: 'solid' } })
   }
   return els
+}
+
+function insertImage(src: string) {
+  const { createImageElement } = useCreateElement()
+  createImageElement(src)
+  // Add confirmation message
+  const session = getActiveSession()
+  if (session) {
+    session.messages.push({
+      id: Date.now().toString() + Math.random().toString(36).slice(2),
+      type: 'ai',
+      content: '图片已插入到当前页面。',
+      timestamp: new Date(),
+      _btnsVisible: true,
+    })
+    saveSessions()
+    scrollToBottom()
+  }
 }
 
 function handleButton(action: string, content: string) {
@@ -504,6 +552,31 @@ onMounted(() => {
   }
   .msg-tool-icon {
     display: inline-flex; vertical-align: middle; margin-right: 4px; opacity: 0.7;
+  }
+  .img-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    margin-top: 8px;
+  }
+  .img-card {
+    position: relative; border-radius: 6px; overflow: hidden;
+    cursor: pointer; aspect-ratio: 16/10;
+
+    img {
+      width: 100%; height: 100%; object-fit: cover;
+      display: block;
+    }
+    .img-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.15s;
+      span {
+        color: #fff; font-size: 12px; font-weight: 500;
+        padding: 4px 12px; background: rgba(139,92,246,0.8);
+        border-radius: 4px;
+      }
+    }
+    &:hover .img-overlay { opacity: 1; }
   }
   .msg-text { line-height: 1.5; }
   .msg-thinking {
