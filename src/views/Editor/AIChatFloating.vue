@@ -27,8 +27,12 @@
           class="msg-row"
           :class="{ 'msg-user': msg.type === 'user', 'msg-ai': msg.type === 'ai' }"
         >
-          <div class="msg-bubble" :class="msg.type">
-            <span class="msg-tool-icon" v-if="msg.tool" v-html="TOOL_ICONS[msg.tool]"></span>
+          <div class="msg-bubble" :class="[msg.type, { 'slide-content': msg._isSlideContent }]">
+            <div class="slide-content-badge" v-if="msg._isSlideContent">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              PPT 内容预览
+            </div>
+            <span class="msg-tool-icon" v-if="msg.tool && !msg._isSlideContent" v-html="TOOL_ICONS[msg.tool]"></span>
             <div class="msg-text" v-if="msg.content">
               <TypeWriter :text="msg.content" :animate="msg.type === 'ai' && !msg._btnsVisible" :key="msg.id + msg.content.length" @complete="msg._btnsVisible = true" />
             </div>
@@ -444,10 +448,39 @@ async function send() {
       }
     }
     else {
-      aiMsg.content = choice?.message?.content || ''
-      aiMsg.buttons = [
-        { label: '插入当前页', action: 'insert' },
-        { label: '新建页插入', action: 'agree' },
+      const fullText = choice?.message?.content || ''
+
+      // Check if response contains PPT content separator
+      if (fullText.includes('---PPT_CONTENT---')) {
+        const [chatPart, pptPart] = fullText.split('---PPT_CONTENT---')
+        // First message: AI's natural language reply (no insert buttons)
+        aiMsg.content = chatPart.trim()
+        aiMsg.buttons = []
+
+        // Second message: PPT content card (with insert buttons)
+        if (pptPart?.trim()) {
+          session.messages.push({
+            id: Date.now().toString() + Math.random().toString(36).slice(2),
+            type: 'ai',
+            content: pptPart.trim(),
+            timestamp: new Date(),
+            _btnsVisible: true,
+            _isSlideContent: true,
+            buttons: [
+              { label: '插入当前页', action: 'insert' },
+              { label: '新建页插入', action: 'agree' },
+            ],
+          })
+        }
+      }
+      else {
+        // No separator — show as regular reply with insert buttons
+        aiMsg.content = fullText
+        aiMsg.buttons = [
+          { label: '插入当前页', action: 'insert' },
+          { label: '新建页插入', action: 'agree' },
+        ]
+      }
       ]
     }
   }
@@ -636,6 +669,16 @@ onMounted(() => {
     border-radius: 10px; padding: 8px 12px; max-width: 90%; word-break: break-word;
     &.user { background: #3b82f6; color: #fff; font-size: 12.5px; }
     &.ai { background: #f3f4f6; color: #111; font-size: 12.5px; }
+    &.slide-content {
+      background: #fff; border: 1.5px solid #8b5cf6; border-radius: 8px;
+      padding: 10px 12px;
+    }
+  }
+  .slide-content-badge {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 10px; color: #8b5cf6; font-weight: 500;
+    margin-bottom: 6px; padding-bottom: 6px;
+    border-bottom: 1px solid #ede9fe;
   }
   .msg-tool-icon {
     display: inline-flex; vertical-align: middle; margin-right: 4px; opacity: 0.7;
