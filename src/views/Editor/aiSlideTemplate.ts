@@ -181,76 +181,88 @@ export function extractTemplate(): SlideTemplate {
 
 /**
  * Build a new slide using the extracted template + AI content.
+ * Forces safe colors and proper centering regardless of template extraction.
  */
 export function buildTemplatedSlide(title: string, body: string, template: SlideTemplate): Slide {
   const elements: PPTElement[] = []
-  const ts = template.titleStyle
-  const bs = template.bodyStyle
+  const SLIDE_W = 1000
+  const SLIDE_H = 562
+  const MARGIN = 50
+
+  // Safe color: never use white/near-white for text
+  const safeColor = (color: string, fallback: string) => {
+    if (!color) return fallback
+    // If color is too light (close to white), use fallback
+    const hex = color.replace('#', '')
+    if (hex.length >= 6) {
+      const r = parseInt(hex.slice(0, 2), 16)
+      const g = parseInt(hex.slice(2, 4), 16)
+      const b = parseInt(hex.slice(4, 6), 16)
+      if (r > 200 && g > 200 && b > 200) return fallback
+    }
+    return color
+  }
+
+  const titleColor = safeColor(template.titleStyle.color, '#2d2d2d')
+  const bodyColor = safeColor(template.bodyStyle.color, '#444444')
+  const titleFont = template.titleStyle.fontName || ''
+  const bodyFont = template.bodyStyle.fontName || ''
+  const titleSize = Math.max(24, template.titleStyle.fontSize)
+  const bodySize = Math.max(14, template.bodyStyle.fontSize)
 
   // Add decorative elements (with new IDs)
   for (const dec of template.decorativeElements) {
     elements.push({ ...dec, id: nanoid(10) } as PPTElement)
   }
 
-  // Title element
-  if (title) {
-    const boldStyle = ts.bold ? 'font-weight: bold;' : ''
+  // Calculate content area
+  const contentW = SLIDE_W - MARGIN * 2
+  const titleH = 52
+
+  if (title && body) {
+    // Title + Body: title at top, body below
+    const bodyH = SLIDE_H - MARGIN - titleH - 20 - MARGIN
+    const bodyTop = MARGIN + titleH + 20
+
     elements.push({
-      type: 'text',
-      id: nanoid(10),
-      left: ts.left,
-      top: ts.top,
-      width: ts.width,
-      height: ts.height,
-      rotate: 0,
-      content: `<p style="text-align: ${ts.align};"><span style="font-size: ${ts.fontSize}px; color: ${ts.color}; ${boldStyle}${ts.fontName ? `font-family: ${ts.fontName};` : ''}">${title}</span></p>`,
-      defaultFontName: ts.fontName,
-      defaultColor: ts.color,
-      lineHeight: 1.3,
-      fill: '',
-      outline: { color: '', width: 0, style: 'solid' },
+      type: 'text', id: nanoid(10),
+      left: MARGIN, top: MARGIN, width: contentW, height: titleH, rotate: 0,
+      content: `<p style="text-align: left;"><span style="font-size: ${titleSize}px; color: ${titleColor}; font-weight: bold;${titleFont ? ` font-family: ${titleFont};` : ''}">${title}</span></p>`,
+      defaultFontName: titleFont, defaultColor: titleColor,
+      lineHeight: 1.3, fill: '', outline: { color: '', width: 0, style: 'solid' },
+    } as PPTTextElement)
+
+    const htmlLines = bodyToHtml(body, bodySize, bodyColor, bodyFont, titleColor)
+    elements.push({
+      type: 'text', id: nanoid(10),
+      left: MARGIN, top: bodyTop, width: contentW, height: bodyH, rotate: 0,
+      content: htmlLines,
+      defaultFontName: bodyFont, defaultColor: bodyColor,
+      lineHeight: 1.6, paragraphSpace: 4, fill: '', outline: { color: '', width: 0, style: 'solid' },
     } as PPTTextElement)
   }
-
-  // Body element
-  if (body) {
-    const bodyTop = title ? ts.top + ts.height + 16 : bs.top
-    const bodyHeight = 562 - bodyTop - 30
-
-    // Convert markdown-like body to HTML
-    const htmlLines = body.split('\n').filter(l => l.trim()).map(line => {
-      let t = line.trim()
-      const isSubheading = t.match(/^#{2,3}\s+(.+)/)
-      const isList = t.match(/^[-*+]\s+(.+)/) || t.match(/^\d+\.\s+(.+)/)
-
-      if (isSubheading) {
-        t = isSubheading[1].replace(/\*\*/g, '')
-        return `<p style="text-align: ${bs.align};"><span style="font-size: ${bs.fontSize + 2}px; color: ${ts.color}; font-weight: bold;${bs.fontName ? `font-family: ${bs.fontName};` : ''}">${t}</span></p>`
-      }
-      if (isList) {
-        t = (isList[1] || t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
-        return `<p style="text-align: ${bs.align}; text-indent: 1em;"><span style="font-size: ${bs.fontSize}px; color: ${bs.color};${bs.fontName ? `font-family: ${bs.fontName};` : ''}">• ${t}</span></p>`
-      }
-
-      t = t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
-      return `<p style="text-align: ${bs.align};"><span style="font-size: ${bs.fontSize}px; color: ${bs.color};${bs.fontName ? `font-family: ${bs.fontName};` : ''}">${t}</span></p>`
-    }).join('')
+  else if (title) {
+    // Title only: centered
+    elements.push({
+      type: 'text', id: nanoid(10),
+      left: MARGIN, top: (SLIDE_H - titleH) / 2, width: contentW, height: titleH, rotate: 0,
+      content: `<p style="text-align: center;"><span style="font-size: ${titleSize + 4}px; color: ${titleColor}; font-weight: bold;${titleFont ? ` font-family: ${titleFont};` : ''}">${title}</span></p>`,
+      defaultFontName: titleFont, defaultColor: titleColor,
+      lineHeight: 1.3, fill: '', outline: { color: '', width: 0, style: 'solid' },
+    } as PPTTextElement)
+  }
+  else if (body) {
+    // Body only: vertically centered
+    const bodyH = Math.min(SLIDE_H - MARGIN * 2, 420)
+    const bodyTop = (SLIDE_H - bodyH) / 2
+    const htmlLines = bodyToHtml(body, bodySize, bodyColor, bodyFont, titleColor)
 
     elements.push({
-      type: 'text',
-      id: nanoid(10),
-      left: bs.left,
-      top: bodyTop,
-      width: bs.width,
-      height: bodyHeight,
-      rotate: 0,
+      type: 'text', id: nanoid(10),
+      left: MARGIN, top: bodyTop, width: contentW, height: bodyH, rotate: 0,
       content: htmlLines,
-      defaultFontName: bs.fontName,
-      defaultColor: bs.color,
-      lineHeight: bs.lineHeight,
-      paragraphSpace: 4,
-      fill: '',
-      outline: { color: '', width: 0, style: 'solid' },
+      defaultFontName: bodyFont, defaultColor: bodyColor,
+      lineHeight: 1.6, paragraphSpace: 4, fill: '', outline: { color: '', width: 0, style: 'solid' },
     } as PPTTextElement)
   }
 
@@ -259,4 +271,24 @@ export function buildTemplatedSlide(title: string, body: string, template: Slide
     elements,
     background: JSON.parse(JSON.stringify(template.background)),
   }
+}
+
+function bodyToHtml(body: string, fontSize: number, color: string, fontName: string, headingColor: string): string {
+  return body.split('\n').filter(l => l.trim()).map(line => {
+    let t = line.trim()
+    const fn = fontName ? ` font-family: ${fontName};` : ''
+    const isSubheading = t.match(/^#{2,3}\s+(.+)/)
+    const isList = t.match(/^[-*+]\s+(.+)/) || t.match(/^\d+\.\s+(.+)/)
+
+    if (isSubheading) {
+      t = isSubheading[1].replace(/\*\*/g, '')
+      return `<p style="text-align: left;"><span style="font-size: ${fontSize + 2}px; color: ${headingColor}; font-weight: bold;${fn}">${t}</span></p>`
+    }
+    if (isList) {
+      t = (isList[1] || t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
+      return `<p style="text-align: left; text-indent: 1em;"><span style="font-size: ${fontSize}px; color: ${color};${fn}">• ${t}</span></p>`
+    }
+    t = t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
+    return `<p style="text-align: left;"><span style="font-size: ${fontSize}px; color: ${color};${fn}">${t}</span></p>`
+  }).join('')
 }
