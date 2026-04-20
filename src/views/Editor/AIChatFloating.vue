@@ -481,7 +481,6 @@ async function send() {
           { label: '新建页插入', action: 'agree' },
         ]
       }
-      ]
     }
   }
   catch {
