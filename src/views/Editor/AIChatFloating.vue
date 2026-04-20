@@ -128,6 +128,7 @@ const mainStore = useMainStore()
 const slidesStore = useSlidesStore()
 const { addSlidesFromData, addElementsFromData } = useAddSlidesOrElements()
 const { addHistorySnapshot } = useHistorySnapshot()
+const { createImageElement } = useCreateElement()
 
 const inputText = ref('')
 const isStreaming = ref(false)
@@ -442,9 +443,7 @@ function buildSlideElements(content: string): PPTTextElement[] {
 }
 
 function insertImage(src: string) {
-  const { createImageElement } = useCreateElement()
   createImageElement(src)
-  // Add confirmation message
   const session = getActiveSession()
   if (session) {
     session.messages.push({
