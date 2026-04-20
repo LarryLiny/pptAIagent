@@ -38,9 +38,9 @@
             <!-- Image grid for search results -->
             <div class="img-grid" v-if="msg.images?.length">
               <div class="img-card" v-for="img in msg.images" :key="img.src" @click="insertImage(img.src)">
-                <img :src="img.src" loading="lazy" />
+                <img :src="img.preview || img.src" loading="lazy" />
                 <div class="img-overlay">
-                  <span>插入</span>
+                  <span>插入到PPT</span>
                 </div>
               </div>
             </div>
@@ -443,7 +443,27 @@ function buildSlideElements(content: string): PPTTextElement[] {
 }
 
 function insertImage(src: string) {
-  createImageElement(src)
+  // Use createImageElement which auto-sizes and centers
+  try {
+    createImageElement(src)
+  }
+  catch {
+    // Fallback: insert with fixed dimensions if getImageSize fails
+    const { addHistorySnapshot: snap } = useHistorySnapshot()
+    slidesStore.addElement({
+      type: 'image',
+      id: nanoid(10),
+      src,
+      width: 400,
+      height: 300,
+      left: 300,
+      top: 130,
+      fixedRatio: true,
+      rotate: 0,
+    })
+    mainStore.setActiveElementIdList([])
+    snap()
+  }
   const session = getActiveSession()
   if (session) {
     session.messages.push({

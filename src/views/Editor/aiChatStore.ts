@@ -8,7 +8,7 @@ export interface ChatMessage {
   timestamp: Date
   buttons?: MsgButton[]
   tool?: string
-  images?: { src: string; width: number; height: number }[]
+  images?: { src: string; preview?: string; width: number; height: number }[]
   _btnsVisible: boolean
 }
 

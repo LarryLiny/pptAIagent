@@ -261,29 +261,39 @@ export const pptTools = [
 // Image search result type
 export interface SearchedImage {
   id: number
-  src: string
+  src: string      // High quality for PPT insertion
+  preview?: string  // Medium quality for chat preview
   width: number
   height: number
 }
 
-// Search images using multiple fallback sources
-export async function searchImages(query: string, orientation: string = 'landscape'): Promise<SearchedImage[]> {
-  // Strategy: generate Unsplash URLs with keyword-based seeds
-  // These are direct image URLs that work without API keys
-  const images: SearchedImage[] = []
-  const w = orientation === 'portrait' ? 400 : 640
-  const h = orientation === 'portrait' ? 640 : 400
-  const ts = Date.now()
+// Search images using Pexels free API
+const PEXELS_API_KEY = '563492ad6f91700001000001e1c1f1a0b1c14b0e9f1e1f1a0b1c1'
 
-  for (let i = 0; i < 4; i++) {
-    images.push({
-      id: i + 1,
-      src: `https://loremflickr.com/${w}/${h}/${encodeURIComponent(query)}?lock=${ts + i}`,
-      width: w,
-      height: h,
+export async function searchImages(query: string, orientation: string = 'landscape'): Promise<SearchedImage[]> {
+  try {
+    const params = new URLSearchParams({
+      query,
+      per_page: '4',
+      page: '1',
+      orientation: orientation === 'all' ? '' : orientation,
     })
+    const resp = await fetch(`https://api.pexels.com/v1/search?${params}`, {
+      headers: { 'Authorization': PEXELS_API_KEY },
+    })
+    if (!resp.ok) return []
+    const data = await resp.json()
+    return (data.photos || []).slice(0, 4).map((photo: any) => ({
+      id: photo.id,
+      src: photo.src.large, // High quality for PPT insertion
+      preview: photo.src.medium, // Medium quality for chat preview
+      width: photo.width,
+      height: photo.height,
+    }))
   }
-  return images
+  catch {
+    return []
+  }
 }
 export function executeTool(name: string, args: Record<string, any>): string {
   const slidesStore = useSlidesStore()
