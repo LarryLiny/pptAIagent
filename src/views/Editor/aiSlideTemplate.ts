@@ -187,10 +187,8 @@ export function buildTemplatedSlide(title: string, body: string, template: Slide
   const ts = template.titleStyle
   const bs = template.bodyStyle
 
-  // Add decorative elements (with new IDs)
-  for (const dec of template.decorativeElements) {
-    elements.push({ ...dec, id: nanoid(10) } as PPTElement)
-  }
+  // Add decorative elements — skip for now to avoid clutter
+  // (decorative shapes from imported PPTX often don't transfer cleanly)
 
   // Title element
   if (title) {

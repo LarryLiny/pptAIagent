@@ -160,6 +160,55 @@ const TOOL_PROMPTS: Record<string, string> = {
   '生成演讲稿': '请生成一份正式风格、5分钟的演讲稿',
 }
 
+interface SettingItem { key: string; label: string; options: string[] }
+const TOOL_SETTINGS: Record<string, SettingItem[]> = {
+  '生成课堂引入': [
+    { key: 'introType', label: '导入类型', options: ['情境导入', '问题导入', '案例导入', '时事导入'] },
+    { key: 'difficulty', label: '难度', options: ['简单', '适中', '进阶'] },
+  ],
+  '搜索背景知识': [
+    { key: 'sourceType', label: '资料来源', options: ['外研社素材库', '全网搜索', '学术资源'] },
+    { key: 'difficulty', label: '内容难度', options: ['简单', '中等', '拔高'] },
+  ],
+  '例题生成': [
+    { key: 'qtype', label: '题型', options: ['选择题', '填空题', '判断题', '简答题'] },
+    { key: 'difficulty', label: '难度', options: ['基础', '中等', '拔高'] },
+    { key: 'count', label: '数量', options: ['1题', '2题', '3题', '5题'] },
+  ],
+  '互动环节设计': [
+    { key: 'form', label: '互动形式', options: ['小组讨论', '角色扮演', '辩论赛', '游戏竞赛'] },
+    { key: 'duration', label: '时长', options: ['5分钟', '10分钟', '15分钟', '20分钟'] },
+  ],
+  '总结要点': [
+    { key: 'scope', label: '总结范围', options: ['全部课件', '当前页', '选中内容'] },
+    { key: 'format', label: '输出格式', options: ['要点列表', '思维导图', '表格对比'] },
+  ],
+  '生成演讲稿': [
+    { key: 'style', label: '风格', options: ['正式', '轻松活泼', '互动式', '故事型'] },
+    { key: 'duration', label: '时长', options: ['3分钟', '5分钟', '10分钟'] },
+  ],
+}
+
+const showSettings = ref(false)
+const toolSettings = reactive<Record<string, string>>({})
+
+function buildPrompt(tool: string, s: Record<string, string>): string {
+  switch (tool) {
+    case '生成课堂引入': return `请结合${s.introType || '情境导入'}方式，设计一段${s.difficulty || '适中'}难度的课堂引入`
+    case '搜索背景知识': return `搜索${s.difficulty || '简单'}难度的背景知识，来源：${s.sourceType || '外研社素材库'}`
+    case '例题生成': return `生成${s.count || '2题'}${s.qtype || '选择题'}，难度${s.difficulty || '基础'}`
+    case '互动环节设计': return `设计一个${s.form || '小组讨论'}互动环节，时长${s.duration || '10分钟'}`
+    case '总结要点': return `帮我总结${s.scope || '全部课件'}的知识要点，格式：${s.format || '要点列表'}`
+    case '生成演讲稿': return `请生成一份${s.style || '正式'}风格、${s.duration || '5分钟'}的演讲稿`
+    default: return ''
+  }
+}
+
+function updateToolSetting(key: string, val: string) {
+  toolSettings[key] = val
+  if (currentTool.value) inputText.value = buildPrompt(currentTool.value, toolSettings)
+}
+
 // Voice recognition
 const isRecording = ref(false)
 const hasSpeechRecognition = ref(false)
@@ -218,7 +267,12 @@ function closeToolMenuDelay() {
 function selectTool(t: string) {
   currentTool.value = t
   toolMenuOpen.value = false
-  inputText.value = TOOL_PROMPTS[t] || ''
+  showSettings.value = true
+  // Initialize default settings
+  Object.keys(toolSettings).forEach(k => delete toolSettings[k])
+  const defs = TOOL_SETTINGS[t]
+  if (defs) defs.forEach(s => { toolSettings[s.key] = s.options[0] })
+  inputText.value = buildPrompt(t, toolSettings)
   nextTick(() => inputRef.value?.focus())
 }
 
@@ -337,19 +391,19 @@ async function send() {
         }
       }
       else {
-        // Execute non-image tool calls
+        // Execute non-image tool calls and collect results
+        const toolResults: { id: string; result: string }[] = []
         for (const tc of toolCalls) {
           let args: Record<string, any> = {}
           try { args = JSON.parse(tc.function.arguments) } catch {}
-          executeTool(tc.function.name, args)
+          const result = executeTool(tc.function.name, args)
+          toolResults.push({ id: tc.id, result })
         }
 
-        // Get summary
+        // Get summary using cached results (don't re-execute!)
         const summaryMsgs = [...chatHistory, choice.message]
-        for (const tc of toolCalls) {
-          let args: Record<string, any> = {}
-          try { args = JSON.parse(tc.function.arguments) } catch {}
-          summaryMsgs.push({ role: 'tool', content: executeTool(tc.function.name, args), tool_call_id: tc.id })
+        for (const tr of toolResults) {
+          summaryMsgs.push({ role: 'tool', content: tr.result, tool_call_id: tr.id })
         }
 
         const summaryResp = await fetch(LLM_API_URL, {
