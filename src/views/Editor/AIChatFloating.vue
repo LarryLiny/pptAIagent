@@ -104,7 +104,6 @@
           class="mic-btn"
           :class="{ recording: isRecording }"
           @click="toggleVoice"
-          v-if="hasSpeechRecognition"
         >
           <svg v-if="!isRecording" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -210,28 +209,63 @@ const currentToolSettings = computed(() => currentTool.value ? TOOL_SETTINGS[cur
 
 // Voice recognition
 const isRecording = ref(false)
-const hasSpeechRecognition = ref(false)
+const hasSpeechRecognition = ref(true) // Show button always, handle errors gracefully
 let recognition: any = null
 
 function initSpeechRecognition() {
   const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
-  if (!SR) return
-  hasSpeechRecognition.value = true
-  recognition = new SR()
-  recognition.lang = 'zh-CN'
-  recognition.continuous = false
-  recognition.interimResults = true
-  recognition.onresult = (e: any) => {
-    inputText.value = Array.from(e.results).map((r: any) => r[0].transcript).join('')
+  if (!SR) {
+    hasSpeechRecognition.value = false
+    return
   }
-  recognition.onend = () => { isRecording.value = false }
-  recognition.onerror = () => { isRecording.value = false }
+  // Don't create instance here — create fresh one each time in toggleVoice
+}
+
+function createRecognition() {
+  const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+  if (!SR) return null
+  const rec = new SR()
+  rec.lang = 'zh-CN'
+  rec.continuous = true
+  rec.interimResults = true
+  rec.maxAlternatives = 1
+
+  rec.onresult = (e: any) => {
+    let transcript = ''
+    for (let i = 0; i < e.results.length; i++) {
+      transcript += e.results[i][0].transcript
+    }
+    if (transcript) inputText.value = transcript
+  }
+  rec.onend = () => {
+    isRecording.value = false
+    recognition = null
+  }
+  rec.onerror = (e: any) => {
+    console.warn('Speech recognition error:', e.error)
+    isRecording.value = false
+    recognition = null
+  }
+  return rec
 }
 
 function toggleVoice() {
+  if (isRecording.value && recognition) {
+    recognition.stop()
+    isRecording.value = false
+    return
+  }
+  // Create fresh instance each time (Chrome requires this after onend)
+  recognition = createRecognition()
   if (!recognition) return
-  if (isRecording.value) { recognition.stop(); isRecording.value = false }
-  else { recognition.start(); isRecording.value = true }
+  try {
+    recognition.start()
+    isRecording.value = true
+  }
+  catch (e) {
+    console.warn('Speech recognition start failed:', e)
+    isRecording.value = false
+  }
 }
 
 const activeSession = computed(() => getActiveSession())
