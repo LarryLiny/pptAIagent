@@ -59,7 +59,9 @@ Good morning, class! Today we will explore how to protect our planet.
 - 回复要简洁，操作完说一句话即可
 - 当用户要求"生成内容"时，按上述格式回复，不要自动插入
 - 只有用户明确说"插入"、"添加到页面"时，才使用add_text_element或add_slide工具
-- 修改已有元素的格式（字号、颜色、位置等）可以直接用update_element工具执行`
+- 修改已有元素的格式（字号、颜色、位置等）可以直接用update_element工具执行
+- 用户输入可能有错别字或口语化表达，请理解真实意图并执行。例如：
+  "子号改大"→字号改大，"颜色改层红色"→颜色改成红色，"加醋"→加粗，"剧中"→居中`
 
 // Serialize current slide elements for LLM context — rich detail for selected element
 export function describeCurrentSlide(selectedElementId?: string): string {

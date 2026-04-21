@@ -131,7 +131,7 @@ export function tryLocalCommand(input: string): LocalCommandResult {
   }
 
   // --- Font size ---
-  const fontSizeMatch = text.match(/字号[改调设]?[成整为到]*\s*(\d+)/) || text.match(/font.?size\s*[:=]?\s*(\d+)/i)
+  const fontSizeMatch = text.match(/[字子]号[改调设]?[成整为到层]*\s*(\d+)/) || text.match(/font.?size\s*[:=]?\s*(\d+)/i)
   if (fontSizeMatch && textEl) {
     const size = parseInt(fontSizeMatch[1])
     if (size >= 8 && size <= 200) {
@@ -139,12 +139,12 @@ export function tryLocalCommand(input: string): LocalCommandResult {
       results.push(`字号→${size}px`)
     }
   }
-  else if (/字号.*(大|增大|放大|调大)/.test(text) && textEl) {
+  else if (/[字子]号.*(大|增大|放大|调大)/.test(text) && textEl) {
     const cur = parseInt(currentContent.match(/font-size:\s*(\d+)/)?.[1] || '16')
     updateContent(changeHtmlFontSize(currentContent, Math.min(200, cur + 4)))
     results.push(`字号增大`)
   }
-  else if (/字号.*(小|减小|缩小|调小)/.test(text) && textEl) {
+  else if (/[字子]号.*(小|减小|缩小|调小)/.test(text) && textEl) {
     const cur = parseInt(currentContent.match(/font-size:\s*(\d+)/)?.[1] || '16')
     updateContent(changeHtmlFontSize(currentContent, Math.max(8, cur - 4)))
     results.push(`字号减小`)
@@ -152,8 +152,8 @@ export function tryLocalCommand(input: string): LocalCommandResult {
 
   // --- Text color ---
   const colorPatterns = [
-    text.match(/(?:文字|字体|文本|字)?颜?色?[改调设]?[成整为到]*\s*(红色?|蓝色?|绿色?|黄色?|橙色?|紫色?|粉色?|黑色?|白色?|灰色?|棕色?|深蓝|浅蓝|深绿|深灰|浅灰|#[0-9a-fA-F]{3,8})/),
-    text.match(/(?:改|变|换)[成为到]?\s*(红色?|蓝色?|绿色?|黄色?|橙色?|紫色?|粉色?|黑色?|白色?|灰色?|#[0-9a-fA-F]{3,8})/)
+    text.match(/(?:文字|字体|文本|字)?颜?色?[改调设]?[成整为到层]*\s*(红色?|蓝色?|绿色?|黄色?|橙色?|紫色?|粉色?|黑色?|白色?|灰色?|棕色?|深蓝|浅蓝|深绿|深灰|浅灰|#[0-9a-fA-F]{3,8})/),
+    text.match(/(?:改|变|换)[成为到层]?\s*(红色?|蓝色?|绿色?|黄色?|橙色?|紫色?|粉色?|黑色?|白色?|灰色?|#[0-9a-fA-F]{3,8})/)
   ]
   for (const m of colorPatterns) {
     if (m && textEl && !results.some(r => r.includes('颜色'))) {
@@ -171,7 +171,7 @@ export function tryLocalCommand(input: string): LocalCommandResult {
     updateContent(changeHtmlBold(currentContent, false))
     results.push('取消加粗')
   }
-  else if (/加粗|变粗|bold/.test(text) && textEl) {
+  else if (/加粗|加醋|变粗|bold/.test(text) && textEl) {
     updateContent(changeHtmlBold(currentContent, true))
     results.push('加粗')
   }
@@ -187,7 +187,7 @@ export function tryLocalCommand(input: string): LocalCommandResult {
   }
 
   // --- Alignment ---
-  if (/居中对齐|文字居中|center/.test(text) && textEl) {
+  if (/居中对齐|文字居中|剧中|center/.test(text) && textEl) {
     updateContent(changeHtmlAlign(currentContent, 'center'))
     results.push('居中')
   }
