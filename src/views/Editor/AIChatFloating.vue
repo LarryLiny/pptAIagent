@@ -309,7 +309,7 @@ function selectTool(t: string) {
   const settings = TOOL_SETTINGS[t]
   if (settings) settings.forEach(s => { defs[s.key] = s.options[0] })
   toolSettings.value = defs
-  inputText.value = buildToolPrompt(t, defs)
+  inputText.value = buildToolDisplayText(t, defs)
   nextTick(() => inputRef.value?.focus())
 }
 
@@ -323,9 +323,24 @@ function clearTool() {
 function updateToolSetting(key: string, val: string) {
   toolSettings.value[key] = val
   if (currentTool.value) {
-    inputText.value = buildToolPrompt(currentTool.value, toolSettings.value)
+    inputText.value = buildToolDisplayText(currentTool.value, toolSettings.value)
   }
 }
+
+// Short display text shown in input box (user-facing)
+function buildToolDisplayText(tool: string, s: Record<string, string>): string {
+  switch (tool) {
+    case '生成课堂引入': return `生成课堂引入，${s.introType || '情境导入'}，${s.difficulty || '适中'}难度`
+    case '搜索背景知识': return `搜索背景知识，${s.sourceType || '外研社素材库'}，${s.difficulty || '适中'}难度`
+    case '例题生成': return `例题生成，${s.count || '2题'}${s.qtype || '选择题'}，${s.difficulty || '基础'}难度`
+    case '互动环节设计': return `互动环节设计，${s.form || '小组讨论'}，${s.duration || '10分钟'}`
+    case '总结要点': return `总结要点，${s.scope || '全部课件'}，${s.format || '要点列表'}`
+    case '生成演讲稿': return `生成演讲稿，${s.style || '正式'}风格，${s.duration || '5分钟'}`
+    default: return tool
+  }
+}
+
+// Full prompt sent to AI (hidden from user)
 
 function buildToolPrompt(tool: string, s: Record<string, string>): string {
   switch (tool) {
@@ -399,12 +414,29 @@ async function send() {
   const txt = inputText.value
   const sessionId = activeSession.value.id
   const tool = currentTool.value
+  const toolSettingsSnapshot = { ...toolSettings.value }
   const selectedElId = mainStore.handleElementId || undefined
 
-  const userContent = txt
-  addMessageToSession(sessionId, { type: 'user', content: userContent, tool: tool || undefined })
+  // Build what the user sees in chat (short display text)
+  const displayText = txt
+
+  // Build what actually gets sent to AI
+  let aiContent: string
+  if (tool) {
+    const fullPrompt = buildToolPrompt(tool, toolSettingsSnapshot)
+    // Check if user modified the display text or added extra content
+    const defaultDisplay = buildToolDisplayText(tool, toolSettingsSnapshot)
+    const userExtra = txt.replace(defaultDisplay, '').trim()
+    aiContent = userExtra ? `${fullPrompt}\n\n补充要求：${userExtra}` : fullPrompt
+  }
+  else {
+    aiContent = txt
+  }
+
+  // Show short display text in chat bubble
+  addMessageToSession(sessionId, { type: 'user', content: displayText, tool: tool || undefined })
   inputText.value = ''
-  currentTool.value = null
+  clearTool()
   scrollToBottom()
 
   // --- Try local command first (zero latency, zero tokens) ---
@@ -450,7 +482,7 @@ async function send() {
     // Replace last user msg with enriched version
     chatHistory[chatHistory.length - 1] = {
       role: 'user',
-      content: `[当前幻灯片]\n${slideContext}\n\n[用户请求]\n${userContent}`,
+      content: `[当前幻灯片]\n${slideContext}\n\n[用户请求]\n${aiContent}`,
     }
 
     const response = await fetch(LLM_API_URL, {
