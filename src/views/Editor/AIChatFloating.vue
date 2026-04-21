@@ -79,11 +79,14 @@
             </div>
           </div>
         </div>
+        <button class="settings-btn" v-if="currentTool" @click="showSettings = !showSettings" :class="{ active: showSettings }">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          更多设置
+        </button>
         <div class="tool-tag" v-if="currentTool">
           <span v-html="TOOL_ICONS[currentTool]"></span>
           {{ currentTool }}
           <span class="tag-x" @click="clearTool">×</span>
-          <span class="tag-settings" @click="showSettings = !showSettings">⚙</span>
         </div>
         <div class="bound-hint" v-if="activeSession?.elementId">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -804,7 +807,14 @@ onMounted(() => {
     padding: 2px 8px; background: #f5f3ff; border: 1px solid #ddd6fe;
     border-radius: 10px; font-size: 10px; color: #7c3aed;
     .tag-x { cursor: pointer; &:hover { color: #5b21b6; } }
-    .tag-settings { cursor: pointer; margin-left: 2px; opacity: 0.7; &:hover { opacity: 1; } }
+  }
+  .settings-btn {
+    display: flex; align-items: center; gap: 3px;
+    padding: 3px 8px; border-radius: 4px; font-size: 10px;
+    border: 1px solid #d1d5db; background: #fff; color: #6b7280;
+    cursor: pointer; white-space: nowrap;
+    &:hover { background: #f3f4f6; border-color: #9ca3af; color: #374151; }
+    &.active { background: #ede9fe; border-color: #c4b5fd; color: #7c3aed; }
   }
   .bound-hint {
     display: flex; align-items: center; gap: 3px;
