@@ -133,7 +133,7 @@ import {
   getActiveSession, addMessageToSession, saveSessions,
   closeFloating as closeFloat,
 } from './aiChatStore'
-import { extractTemplate, buildTemplatedSlide } from './aiSlideTemplate'
+import { buildTemplatedSlide, describeTemplates, analyzeTemplates } from './aiSlideTemplate'
 import type { Slide, PPTTextElement } from '@/types/slides'
 
 const LLM_API_URL = import.meta.env.DEV ? '/llm/v1/chat/completions' : 'https://modelproxy.unipus.cn/v1/chat/completions'
@@ -313,7 +313,11 @@ function buildChatHistory() {
   const session = activeSession.value
   if (!session) return []
 
-  const msgs: any[] = [{ role: 'system', content: SYSTEM_PROMPT }]
+  // Inject template info into system prompt
+  const templateInfo = describeTemplates()
+  const fullSystemPrompt = SYSTEM_PROMPT + `\n\n## 当前PPT模板信息\n${templateInfo}\n\n根据生成内容的类型，自动选择对应模板：\n- 只有标题 → 使用title模板\n- 标题+正文 → 使用content模板\n- 多个短条目 → 使用toc(目录)模板`
+
+  const msgs: any[] = [{ role: 'system', content: fullSystemPrompt }]
   // Only include last 10 messages to save tokens
   const recent = session.messages.slice(-10)
   for (const m of recent) {
@@ -578,18 +582,15 @@ function handleButton(action: string, content: string) {
     return
   }
 
-  const template = extractTemplate()
   const { title, body } = parseContent(content)
 
   if (action === 'insert') {
-    // Insert only text elements into current slide (not decorative shapes)
-    const slide = buildTemplatedSlide(title, body, template)
+    const slide = buildTemplatedSlide(title, body)
     const textEls = slide.elements.filter(el => el.type === 'text')
     for (const el of textEls) addElementsFromData([el])
   }
   else if (action === 'agree') {
-    // Create new slide using template
-    const slide = buildTemplatedSlide(title, body, template)
+    const slide = buildTemplatedSlide(title, body)
     addSlidesFromData([slide])
   }
 }
@@ -617,6 +618,8 @@ watch(floatingOpen, (open) => {
 onMounted(() => {
   pos.value.x = Math.max(100, window.innerWidth - 520)
   initSpeechRecognition()
+  // Pre-analyze templates on mount
+  analyzeTemplates()
 })
 </script>
 

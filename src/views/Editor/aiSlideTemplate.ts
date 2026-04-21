@@ -1,47 +1,38 @@
 /**
- * Extract template styles from current PPT slides for AI-generated content.
- * Analyzes existing slides to determine: background, font styles, layout, colors.
+ * Multi-type template extraction from existing PPT slides.
+ * Analyzes all slides to classify them by type (cover, toc, title, content)
+ * and extract layout templates for each type.
  */
 import { useSlidesStore } from '@/store'
 import { nanoid } from 'nanoid'
 import type { Slide, SlideBackground, PPTTextElement, PPTElement } from '@/types/slides'
 
-export interface SlideTemplate {
-  background: SlideBackground
-  titleStyle: {
-    fontSize: number
-    color: string
-    fontName: string
-    bold: boolean
-    align: string
-    left: number
-    top: number
-    width: number
-    height: number
-  }
-  bodyStyle: {
-    fontSize: number
-    color: string
-    fontName: string
-    align: string
-    left: number
-    top: number
-    width: number
-    height: number
-    lineHeight: number
-  }
-  themeColor: string
-  decorativeElements: PPTElement[] // shapes, lines that form the page decoration
+// Slide type classification
+export type SlideType = 'cover' | 'toc' | 'title' | 'content' | 'unknown'
+
+export interface ElementLayout {
+  left: number; top: number; width: number; height: number
+  fontSize: number; color: string; fontName: string; bold: boolean; align: string
 }
 
-// Extract font info from HTML content
+export interface TypedTemplate {
+  type: SlideType
+  background: SlideBackground
+  titleLayout?: ElementLayout
+  bodyLayout?: ElementLayout
+  decorativeElements: PPTElement[]
+  sourceSlideIndex: number
+}
+
+// Cached templates — computed once on first access
+let cachedTemplates: TypedTemplate[] | null = null
+
 function extractFontInfo(html: string) {
   const fsMatch = html.match(/font-size:\s*(\d+(?:\.\d+)?)px/)
   const colorMatch = html.match(/(?<![background-])color:\s*(#[0-9a-fA-F]{3,8})/)
   const fontMatch = html.match(/font-family:\s*['"]?([^'";]+)/)
   const boldMatch = /font-weight:\s*bold/.test(html)
   const alignMatch = html.match(/text-align:\s*(\w+)/)
-
   return {
     fontSize: fsMatch ? parseFloat(fsMatch[1]) : 16,
     color: colorMatch ? colorMatch[1] : '#333333',
@@ -51,128 +42,104 @@ function extractFontInfo(html: string) {
   }
 }
 
+function getPlainText(html: string): string {
+  const tmp = document.createElement('div')
+  tmp.innerHTML = html
+  return tmp.textContent || ''
+}
+
+function safeColor(color: string, fallback: string): string {
+  if (!color) return fallback
+  const hex = color.replace('#', '')
+  if (hex.length >= 6) {
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+    if (r > 200 && g > 200 && b > 200) return fallback
+  }
+  return color
+}
+
 /**
- * Analyze existing slides to extract a reusable template.
- * Looks at the first few slides to find common patterns.
+ * Classify a slide by analyzing its text elements.
  */
-export function extractTemplate(): SlideTemplate {
-  const slidesStore = useSlidesStore()
-  const slides = slidesStore.slides
-  const theme = slidesStore.theme
+function classifySlide(slide: Slide, index: number, total: number): SlideType {
+  const textEls = slide.elements.filter(el => el.type === 'text') as PPTTextElement[]
+  if (textEls.length === 0) return 'unknown'
 
-  // Default template
-  const defaultTemplate: SlideTemplate = {
-    background: { type: 'solid', color: theme.backgroundColor || '#ffffff' },
-    titleStyle: {
-      fontSize: 28, color: theme.fontColor || '#1a1a2e', fontName: theme.fontName || '',
-      bold: true, align: 'left', left: 48, top: 36, width: 900, height: 52,
-    },
-    bodyStyle: {
-      fontSize: 18, color: theme.fontColor || '#333333', fontName: theme.fontName || '',
-      align: 'left', left: 48, top: 100, width: 900, height: 420, lineHeight: 1.6,
-    },
-    themeColor: theme.themeColors[0] || '#5b9bd5',
-    decorativeElements: [],
+  const texts = textEls.map(el => ({
+    plain: getPlainText(el.content),
+    font: extractFontInfo(el.content),
+    el,
+  }))
+
+  // First slide is usually cover
+  if (index === 0) return 'cover'
+  // Last slide is often a thank-you/end page
+  if (index === total - 1 && textEls.length <= 2) return 'cover'
+
+  // TOC detection: multiple short items (3+), similar font sizes
+  const shortTexts = texts.filter(t => t.plain.length < 30 && t.plain.length > 0)
+  if (shortTexts.length >= 3) {
+    const sizes = shortTexts.map(t => t.font.fontSize)
+    const sameSize = sizes.every(s => Math.abs(s - sizes[0]) < 3)
+    if (sameSize) return 'toc'
   }
 
-  if (!slides.length) return defaultTemplate
+  // Title-only: 1-2 text elements, all short, large font
+  if (textEls.length <= 2 && texts.every(t => t.plain.length < 40)) {
+    const maxFont = Math.max(...texts.map(t => t.font.fontSize))
+    if (maxFont >= 24) return 'title'
+  }
 
-  // Analyze slides (skip first which is usually a cover)
-  const contentSlides = slides.length > 2 ? slides.slice(1, 5) : slides
-  
-  // Collect title and body styles from content slides
-  const titleInfos: ReturnType<typeof extractFontInfo>[] = []
-  const bodyInfos: ReturnType<typeof extractFontInfo>[] = []
-  const titlePositions: { left: number; top: number; width: number; height: number }[] = []
-  const bodyPositions: { left: number; top: number; width: number; height: number }[] = []
-  let sampleBackground: SlideBackground | null = null
-  const decoratives: PPTElement[] = []
-
-  for (const slide of contentSlides) {
-    // Get background from a content slide (not cover)
-    if (!sampleBackground && slide.background) {
-      sampleBackground = JSON.parse(JSON.stringify(slide.background))
-    }
-
-    // Classify text elements by position (top = title, lower = body)
-    const textEls = slide.elements.filter(el => el.type === 'text') as PPTTextElement[]
-    const sortedByTop = [...textEls].sort((a, b) => a.top - b.top)
-
-    if (sortedByTop.length >= 2) {
-      // First text element is likely the title
-      const titleEl = sortedByTop[0]
-      const bodyEl = sortedByTop[1]
-
-      titleInfos.push(extractFontInfo(titleEl.content))
-      titlePositions.push({ left: titleEl.left, top: titleEl.top, width: titleEl.width, height: titleEl.height })
-
-      bodyInfos.push(extractFontInfo(bodyEl.content))
-      bodyPositions.push({ left: bodyEl.left, top: bodyEl.top, width: bodyEl.width, height: bodyEl.height })
-    }
-    else if (sortedByTop.length === 1) {
-      bodyInfos.push(extractFontInfo(sortedByTop[0].content))
-      bodyPositions.push({ left: sortedByTop[0].left, top: sortedByTop[0].top, width: sortedByTop[0].width, height: sortedByTop[0].height })
-    }
-
-    // Collect decorative elements (shapes, lines without text — likely design elements)
-    for (const el of slide.elements) {
-      if (el.type === 'shape' && !(el as any).text?.content) {
-        decoratives.push(JSON.parse(JSON.stringify(el)))
-      }
-      else if (el.type === 'line') {
-        decoratives.push(JSON.parse(JSON.stringify(el)))
-      }
+  // Content page: has both large (title) and smaller (body) text
+  if (textEls.length >= 2) {
+    const sorted = [...texts].sort((a, b) => a.el.top - b.el.top)
+    const first = sorted[0]
+    const rest = sorted.slice(1)
+    if (first.font.fontSize > 20 && rest.some(r => r.plain.length > 30)) {
+      return 'content'
     }
   }
 
-  // Average the collected styles
-  const template = { ...defaultTemplate }
+  // Default: content
+  return textEls.length >= 2 ? 'content' : 'title'
+}
 
-  if (sampleBackground) {
-    template.background = sampleBackground
-  }
+/**
+ * Extract a typed template from a slide.
+ */
+function extractTypedTemplate(slide: Slide, type: SlideType, index: number): TypedTemplate {
+  const textEls = slide.elements.filter(el => el.type === 'text') as PPTTextElement[]
+  const sorted = [...textEls].sort((a, b) => a.top - b.top)
+  const decoratives = slide.elements
+    .filter(el => el.type === 'shape' || el.type === 'line')
+    .filter(el => el.type !== 'shape' || !(el as any).text?.content)
+    .slice(0, 5)
+    .map(el => JSON.parse(JSON.stringify(el)))
 
-  if (titleInfos.length) {
-    const avg = titleInfos[0] // Use first found as representative
-    template.titleStyle.fontSize = avg.fontSize > 20 ? avg.fontSize : 28
-    template.titleStyle.color = avg.color
-    template.titleStyle.fontName = avg.fontName
-    template.titleStyle.bold = avg.bold
-    template.titleStyle.align = avg.align
-  }
-  if (titlePositions.length) {
-    const p = titlePositions[0]
-    template.titleStyle.left = p.left
-    template.titleStyle.top = p.top
-    template.titleStyle.width = p.width
-    template.titleStyle.height = p.height
-  }
+  const bg: SlideBackground = slide.background
+    ? JSON.parse(JSON.stringify(slide.background))
+    : { type: 'solid', color: '#ffffff' }
 
-  if (bodyInfos.length) {
-    const avg = bodyInfos[0]
-    template.bodyStyle.fontSize = avg.fontSize > 10 ? avg.fontSize : 18
-    template.bodyStyle.color = avg.color
-    template.bodyStyle.fontName = avg.fontName
-    template.bodyStyle.align = avg.align
-  }
-  if (bodyPositions.length) {
-    const p = bodyPositions[0]
-    template.bodyStyle.left = p.left
-    template.bodyStyle.top = p.top
-    template.bodyStyle.width = p.width
-    template.bodyStyle.height = p.height
+  const template: TypedTemplate = {
+    type, background: bg, decorativeElements: decoratives, sourceSlideIndex: index,
   }
 
-  // Use first slide's decorative elements as template (deduplicated by position)
-  if (decoratives.length) {
-    const seen = new Set<string>()
-    for (const el of decoratives) {
-      const key = `${el.type}-${Math.round(el.left)}-${Math.round(el.top)}-${Math.round(el.width)}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        template.decorativeElements.push(el)
-        if (template.decorativeElements.length >= 5) break // Max 5 decorative elements
-      }
+  if (sorted.length >= 1) {
+    const titleEl = sorted[0]
+    const fi = extractFontInfo(titleEl.content)
+    template.titleLayout = {
+      left: titleEl.left, top: titleEl.top, width: titleEl.width, height: titleEl.height,
+      fontSize: fi.fontSize, color: fi.color, fontName: fi.fontName, bold: fi.bold, align: fi.align,
+    }
+  }
+  if (sorted.length >= 2) {
+    const bodyEl = sorted[1]
+    const fi = extractFontInfo(bodyEl.content)
+    template.bodyLayout = {
+      left: bodyEl.left, top: bodyEl.top, width: bodyEl.width, height: bodyEl.height,
+      fontSize: fi.fontSize, color: fi.color, fontName: fi.fontName, bold: fi.bold, align: fi.align,
     }
   }
 
@@ -180,100 +147,167 @@ export function extractTemplate(): SlideTemplate {
 }
 
 /**
- * Build a new slide using the extracted template + AI content.
- * Forces safe colors and proper centering regardless of template extraction.
+ * Analyze all slides and extract templates by type. Cached after first call.
  */
-export function buildTemplatedSlide(title: string, body: string, template: SlideTemplate): Slide {
-  const elements: PPTElement[] = []
-  const SLIDE_W = 1000
-  const SLIDE_H = 562
-  const MARGIN = 50
+export function analyzeTemplates(): TypedTemplate[] {
+  if (cachedTemplates) return cachedTemplates
 
-  // Safe color: never use white/near-white for text
-  const safeColor = (color: string, fallback: string) => {
-    if (!color) return fallback
-    // If color is too light (close to white), use fallback
-    const hex = color.replace('#', '')
-    if (hex.length >= 6) {
-      const r = parseInt(hex.slice(0, 2), 16)
-      const g = parseInt(hex.slice(2, 4), 16)
-      const b = parseInt(hex.slice(4, 6), 16)
-      if (r > 200 && g > 200 && b > 200) return fallback
+  const slidesStore = useSlidesStore()
+  const slides = slidesStore.slides
+  if (!slides.length) return []
+
+  const templates: TypedTemplate[] = []
+  const seenTypes = new Set<SlideType>()
+
+  for (let i = 0; i < slides.length; i++) {
+    const type = classifySlide(slides[i], i, slides.length)
+    if (type !== 'unknown' && !seenTypes.has(type)) {
+      seenTypes.add(type)
+      templates.push(extractTypedTemplate(slides[i], type, i))
     }
-    return color
   }
 
-  const titleColor = safeColor(template.titleStyle.color, '#2d2d2d')
-  const bodyColor = safeColor(template.bodyStyle.color, '#444444')
-  const titleFont = template.titleStyle.fontName || ''
-  const bodyFont = template.bodyStyle.fontName || ''
-  const titleSize = Math.max(24, template.titleStyle.fontSize)
-  const bodySize = Math.max(14, template.bodyStyle.fontSize)
+  cachedTemplates = templates
+  return templates
+}
 
-  // Add decorative elements (with new IDs)
-  for (const dec of template.decorativeElements) {
-    elements.push({ ...dec, id: nanoid(10) } as PPTElement)
+/** Reset cache (call when slides change significantly) */
+export function resetTemplateCache() {
+  cachedTemplates = null
+}
+
+/**
+ * Get the best template for a given content type.
+ */
+export function getTemplateForType(type: SlideType): TypedTemplate | null {
+  const templates = analyzeTemplates()
+  return templates.find(t => t.type === type) || templates.find(t => t.type === 'content') || null
+}
+
+/**
+ * Describe all templates for LLM context (injected once at session start).
+ */
+export function describeTemplates(): string {
+  const templates = analyzeTemplates()
+  if (!templates.length) return '未检测到模板。'
+
+  const lines: string[] = ['已分析当前PPT的页面模板：']
+  for (const t of templates) {
+    const bgDesc = t.background.type === 'solid' ? `纯色${t.background.color}` : t.background.type
+    let desc = `[${t.type}] 背景:${bgDesc}`
+    if (t.titleLayout) {
+      desc += ` 标题:${t.titleLayout.fontSize}px/${t.titleLayout.color}/${t.titleLayout.bold ? '粗' : '常'}/${t.titleLayout.align}`
+    }
+    if (t.bodyLayout) {
+      desc += ` 正文:${t.bodyLayout.fontSize}px/${t.bodyLayout.color}`
+    }
+    desc += ` 装饰:${t.decorativeElements.length}个`
+    lines.push(desc)
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Build a slide from a typed template + content.
+ */
+export function buildTemplatedSlide(title: string, body: string, _template?: any): Slide {
+  // Determine content type
+  let type: SlideType = 'content'
+  if (title && !body) type = 'title'
+  if (!title && body && body.split('\n').filter(l => l.trim()).length >= 4) {
+    // Multiple short items might be TOC
+    const lines = body.split('\n').filter(l => l.trim())
+    if (lines.every(l => l.length < 40)) type = 'toc'
   }
 
-  // Calculate content area
+  const template = getTemplateForType(type)
+  const SLIDE_W = 1000, SLIDE_H = 562, MARGIN = 50
   const contentW = SLIDE_W - MARGIN * 2
+
+  // Fallback defaults
+  const titleColor = safeColor(template?.titleLayout?.color || '', '#2d2d2d')
+  const bodyColor = safeColor(template?.bodyLayout?.color || '', '#444444')
+  const titleFont = template?.titleLayout?.fontName || ''
+  const bodyFont = template?.bodyLayout?.fontName || ''
+  const titleSize = Math.max(24, template?.titleLayout?.fontSize || 28)
+  const bodySize = Math.max(14, template?.bodyLayout?.fontSize || 18)
+  const titleBold = template?.titleLayout?.bold !== false
+  const titleAlign = template?.titleLayout?.align || 'left'
+  const bodyAlign = template?.bodyLayout?.align || 'left'
+
+  const bg: SlideBackground = template?.background
+    ? JSON.parse(JSON.stringify(template.background))
+    : { type: 'solid', color: '#ffffff' }
+
+  const elements: PPTElement[] = []
+
+  // Copy decorative elements
+  if (template?.decorativeElements) {
+    for (const dec of template.decorativeElements) {
+      elements.push({ ...dec, id: nanoid(10) } as PPTElement)
+    }
+  }
+
+  const fn = (f: string) => f ? ` font-family: ${f};` : ''
   const titleH = 52
 
   if (title && body) {
-    // Title + Body: title at top, body below
-    const bodyH = SLIDE_H - MARGIN - titleH - 20 - MARGIN
-    const bodyTop = MARGIN + titleH + 20
+    // Use template positions if available, otherwise default
+    const tl = template?.titleLayout
+    const tLeft = tl ? tl.left : MARGIN
+    const tTop = tl ? tl.top : MARGIN
+    const tWidth = Math.max(contentW, tl?.width || 0)
 
     elements.push({
       type: 'text', id: nanoid(10),
-      left: MARGIN, top: MARGIN, width: contentW, height: titleH, rotate: 0,
-      content: `<p style="text-align: left;"><span style="font-size: ${titleSize}px; color: ${titleColor}; font-weight: bold;${titleFont ? ` font-family: ${titleFont};` : ''}">${title}</span></p>`,
+      left: tLeft, top: tTop, width: tWidth, height: titleH, rotate: 0,
+      content: `<p style="text-align: ${titleAlign};"><span style="font-size: ${titleSize}px; color: ${titleColor}; ${titleBold ? 'font-weight: bold;' : ''}${fn(titleFont)}">${title}</span></p>`,
       defaultFontName: titleFont, defaultColor: titleColor,
       lineHeight: 1.3, fill: '', outline: { color: '', width: 0, style: 'solid' },
     } as PPTTextElement)
 
-    const htmlLines = bodyToHtml(body, bodySize, bodyColor, bodyFont, titleColor)
+    const bl = template?.bodyLayout
+    const bTop = bl ? bl.top : tTop + titleH + 20
+    const bLeft = bl ? bl.left : MARGIN
+    const bWidth = Math.max(contentW, bl?.width || 0)
+    const bHeight = SLIDE_H - bTop - 30
+
     elements.push({
       type: 'text', id: nanoid(10),
-      left: MARGIN, top: bodyTop, width: contentW, height: bodyH, rotate: 0,
-      content: htmlLines,
+      left: bLeft, top: bTop, width: bWidth, height: bHeight, rotate: 0,
+      content: bodyToHtml(body, bodySize, bodyColor, bodyFont, titleColor, bodyAlign),
       defaultFontName: bodyFont, defaultColor: bodyColor,
       lineHeight: 1.6, paragraphSpace: 4, fill: '', outline: { color: '', width: 0, style: 'solid' },
     } as PPTTextElement)
   }
   else if (title) {
-    // Title only: centered
+    // Title only — centered vertically
+    const tl = template?.titleLayout
     elements.push({
       type: 'text', id: nanoid(10),
-      left: MARGIN, top: (SLIDE_H - titleH) / 2, width: contentW, height: titleH, rotate: 0,
-      content: `<p style="text-align: center;"><span style="font-size: ${titleSize + 4}px; color: ${titleColor}; font-weight: bold;${titleFont ? ` font-family: ${titleFont};` : ''}">${title}</span></p>`,
+      left: tl?.left || MARGIN, top: (SLIDE_H - titleH) / 2,
+      width: Math.max(contentW, tl?.width || 0), height: titleH, rotate: 0,
+      content: `<p style="text-align: center;"><span style="font-size: ${titleSize + 4}px; color: ${titleColor}; font-weight: bold;${fn(titleFont)}">${title}</span></p>`,
       defaultFontName: titleFont, defaultColor: titleColor,
       lineHeight: 1.3, fill: '', outline: { color: '', width: 0, style: 'solid' },
     } as PPTTextElement)
   }
   else if (body) {
-    // Body only: vertically centered
     const bodyH = Math.min(SLIDE_H - MARGIN * 2, 420)
     const bodyTop = (SLIDE_H - bodyH) / 2
-    const htmlLines = bodyToHtml(body, bodySize, bodyColor, bodyFont, titleColor)
-
     elements.push({
       type: 'text', id: nanoid(10),
       left: MARGIN, top: bodyTop, width: contentW, height: bodyH, rotate: 0,
-      content: htmlLines,
+      content: bodyToHtml(body, bodySize, bodyColor, bodyFont, titleColor, bodyAlign),
       defaultFontName: bodyFont, defaultColor: bodyColor,
       lineHeight: 1.6, paragraphSpace: 4, fill: '', outline: { color: '', width: 0, style: 'solid' },
     } as PPTTextElement)
   }
 
-  return {
-    id: nanoid(10),
-    elements,
-    background: JSON.parse(JSON.stringify(template.background)),
-  }
+  return { id: nanoid(10), elements, background: bg }
 }
 
-function bodyToHtml(body: string, fontSize: number, color: string, fontName: string, headingColor: string): string {
+function bodyToHtml(body: string, fontSize: number, color: string, fontName: string, headingColor: string, align: string): string {
   return body.split('\n').filter(l => l.trim()).map(line => {
     let t = line.trim()
     const fn = fontName ? ` font-family: ${fontName};` : ''
@@ -282,13 +316,24 @@ function bodyToHtml(body: string, fontSize: number, color: string, fontName: str
 
     if (isSubheading) {
       t = isSubheading[1].replace(/\*\*/g, '')
-      return `<p style="text-align: left;"><span style="font-size: ${fontSize + 2}px; color: ${headingColor}; font-weight: bold;${fn}">${t}</span></p>`
+      return `<p style="text-align: ${align};"><span style="font-size: ${fontSize + 2}px; color: ${headingColor}; font-weight: bold;${fn}">${t}</span></p>`
     }
     if (isList) {
       t = (isList[1] || t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
-      return `<p style="text-align: left; text-indent: 1em;"><span style="font-size: ${fontSize}px; color: ${color};${fn}">• ${t}</span></p>`
+      return `<p style="text-align: ${align}; text-indent: 1em;"><span style="font-size: ${fontSize}px; color: ${color};${fn}">• ${t}</span></p>`
     }
     t = t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
-    return `<p style="text-align: left;"><span style="font-size: ${fontSize}px; color: ${color};${fn}">${t}</span></p>`
+    return `<p style="text-align: ${align};"><span style="font-size: ${fontSize}px; color: ${color};${fn}">${t}</span></p>`
   }).join('')
+}
+
+// Legacy export for backward compatibility
+export function extractTemplate() {
+  return getTemplateForType('content') || {
+    background: { type: 'solid' as const, color: '#ffffff' },
+    titleStyle: { fontSize: 28, color: '#2d2d2d', fontName: '', bold: true, align: 'left', left: 50, top: 50, width: 900, height: 52 },
+    bodyStyle: { fontSize: 18, color: '#444444', fontName: '', align: 'left', left: 50, top: 120, width: 900, height: 400, lineHeight: 1.6 },
+    themeColor: '#5b9bd5',
+    decorativeElements: [],
+  }
 }
