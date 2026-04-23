@@ -249,8 +249,9 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   const SLIDE_W = 1000, SLIDE_H = 562, MARGIN = 50
   const contentW = SLIDE_W - MARGIN * 2
 
-  // Clamp helper: ensure left + width <= SLIDE_W
-  const clampWidth = (left: number, width: number) => Math.min(width, SLIDE_W - left)
+  // Clamp helper: compute max available width from a given left position
+  // Leave a small right margin (same as MARGIN) to keep content tidy
+  const availableWidth = (left: number) => SLIDE_W - left - MARGIN
 
   // Colors and fonts from template (safe defaults)
   const titleColor = safeColor(template?.titleLayout?.color || '', '#2d2d2d')
@@ -289,7 +290,7 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
     const tl = template?.titleLayout
     const tLeft = tl ? tl.left : MARGIN
     const tTop = tl ? tl.top : MARGIN
-    const tWidth = clampWidth(tLeft, Math.min(contentW, tl?.width || contentW))
+    const tWidth = availableWidth(tLeft)
 
     elements.push({
       type: 'text', id: nanoid(10),
@@ -302,7 +303,7 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
     const bl = template?.bodyLayout
     const bTop = bl ? bl.top : tTop + titleH + 16
     const bLeft = bl ? bl.left : MARGIN
-    const bWidth = clampWidth(bLeft, Math.min(contentW, bl?.width || contentW))
+    const bWidth = availableWidth(bLeft)
     const bHeight = SLIDE_H - bTop - 30
     // Adjust line height for dense content
     const lineHeight = bodySize <= 14 ? 1.4 : bodySize <= 16 ? 1.5 : 1.6
@@ -318,7 +319,7 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   else if (title) {
     const tl = template?.titleLayout
     const tLeft = tl?.left || MARGIN
-    const tWidth = clampWidth(tLeft, Math.min(contentW, tl?.width || contentW))
+    const tWidth = availableWidth(tLeft)
     elements.push({
       type: 'text', id: nanoid(10),
       left: tLeft, top: (SLIDE_H - titleH) / 2,
