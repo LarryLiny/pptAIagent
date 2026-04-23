@@ -85,10 +85,30 @@ const iconPosition = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24
   h('line', { x1: 12, y1: 2, x2: 12, y2: 22 }),
 ])
 
-const iconAI = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
-  h('path', { d: 'M9.937 15.5A2 2 0 008.5 14.063l-6.135-1.582a.5.5 0 010-.962L8.5 9.936A2 2 0 009.937 8.5l1.582-6.135a.5.5 0 01.963 0L14.063 8.5A2 2 0 0015.5 9.937l6.135 1.582a.5.5 0 010 .962L15.5 14.063a2 2 0 00-1.437 1.437l-1.582 6.135a.5.5 0 01-.963 0z' }),
-  h('path', { d: 'M20 3v4' }),
-  h('path', { d: 'M22 5h-4' }),
+const iconAI = () => h('svg', {
+  class: 'ai-icon-svg',
+  width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none',
+}, [
+  h('defs', [
+    h('linearGradient', { id: 'ai-grad', x1: '0%', y1: '0%', x2: '100%', y2: '100%' }, [
+      h('stop', { offset: '0%', 'stop-color': '#a78bfa' }),
+      h('stop', { offset: '50%', 'stop-color': '#818cf8' }),
+      h('stop', { offset: '100%', 'stop-color': '#60a5fa' }),
+    ]),
+  ]),
+  // Main sparkle
+  h('path', {
+    d: 'M12 2C12 2 13.5 8.5 15.5 10.5C17.5 12.5 22 12 22 12C22 12 17.5 13.5 15.5 15.5C13.5 17.5 12 22 12 22C12 22 10.5 17.5 8.5 15.5C6.5 13.5 2 12 2 12C2 12 6.5 10.5 8.5 8.5C10.5 6.5 12 2 12 2Z',
+    fill: 'url(#ai-grad)',
+    class: 'ai-sparkle-main',
+  }),
+  // Small sparkle top-right
+  h('path', {
+    d: 'M19 2C19 2 19.5 4 20.5 5C21.5 6 23 5.5 23 5.5C23 5.5 21.5 6.5 20.5 7.5C19.5 8.5 19 10 19 10C19 10 18.5 8.5 17.5 7.5C16.5 6.5 15 5.5 15 5.5C15 5.5 16.5 5 17.5 4C18.5 3 19 2 19 2Z',
+    fill: 'url(#ai-grad)',
+    opacity: 0.7,
+    class: 'ai-sparkle-small',
+  }),
 ])
 
 const tabIcons: Record<string, any> = {
@@ -212,7 +232,52 @@ const currentPanelComponent = computed(() => {
       -webkit-text-fill-color: transparent;
       font-weight: 600;
     }
+
+    .ai-icon-svg {
+      filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.3));
+      animation: ai-pulse 2.5s ease-in-out infinite;
+
+      .ai-sparkle-main {
+        transform-origin: 12px 12px;
+        animation: ai-rotate 6s linear infinite;
+      }
+      .ai-sparkle-small {
+        transform-origin: 19px 6px;
+        animation: ai-twinkle 2s ease-in-out infinite 0.5s;
+      }
+    }
+
+    &:hover .ai-icon-svg {
+      filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.5));
+      animation: none;
+      transform: scale(1.15);
+      transition: transform 0.2s ease, filter 0.2s ease;
+
+      .ai-sparkle-main {
+        animation: ai-rotate 2s linear infinite;
+      }
+    }
+
+    &.active .ai-icon-svg {
+      filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.5));
+    }
   }
+}
+
+@keyframes ai-pulse {
+  0%, 100% { opacity: 0.85; filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.2)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.45)); }
+}
+
+@keyframes ai-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ai-twinkle {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.6); }
+}
 }
 
 .content {
