@@ -141,6 +141,15 @@ A. Economic growth  B. Environmental impact  C. Social development
 - 用户输入可能有错别字或口语化表达，请理解真实意图并执行。例如：
   "子号改大"→字号改大，"颜色改层红色"→颜色改成红色，"加醋"→加粗，"剧中"→居中
 
+## 布局优化规则（非常重要！）
+当用户要求"优化布局"或"调整布局"时，必须遵守以下原则：
+1. **保守原则**：优先微调，不要大幅改动。保留原有内容和格式的优点
+2. **不要缩小字号**：除非用户明确要求，否则不要减小已有文本的字号
+3. **不要重写内容**：不要改变文本的实际内容，只调整位置、对齐等布局属性
+4. **边界安全**：元素的 left+width 不得超过 1000px，top+height 不得超过 562px
+5. **标题居中**：如果要居中标题，使用 left = (1000 - width) / 2，不要改变 width
+6. **保持可读性**：调整后的文本不应出现截断或溢出画布的情况
+
 ## PPT内容长度限制（非常重要！）
 生成的PPT内容必须控制长度，因为要插入到一页幻灯片中（1000×562px）：
 - 标题：不超过20个字
@@ -209,7 +218,7 @@ export const pptTools = [
     type: 'function' as const,
     function: {
       name: 'update_element',
-      description: '修改当前页面上已有元素的属性，如位置、尺寸、文字内容、字号、颜色、对齐、背景色、透明度等。',
+      description: '修改当前页面上已有元素的属性，如位置、尺寸、文字内容、字号、颜色、对齐、背景色、透明度等。注意：位置和尺寸会被自动约束在画布范围内（1000×562px），确保元素不会移出可见区域。',
       parameters: {
         type: 'object',
         properties: {
@@ -416,10 +425,31 @@ export function executeTool(name: string, args: Record<string, any>): string {
       case 'update_element': {
         const { element_id, ...props } = args
         const updateProps: Record<string, any> = {}
-        if (props.left !== undefined) updateProps.left = props.left
-        if (props.top !== undefined) updateProps.top = props.top
-        if (props.width !== undefined) updateProps.width = props.width
-        if (props.height !== undefined) updateProps.height = props.height
+
+        // Find the target element to validate bounds
+        const targetEl = slidesStore.currentSlide?.elements.find(e => e.id === element_id)
+
+        // Use current or proposed dimensions for bounds checking
+        const elWidth = props.width ?? targetEl?.width ?? 0
+        const elHeight = props.height ?? targetEl?.height ?? 0
+
+        if (props.left !== undefined) {
+          // Clamp left so element stays within canvas (at least 10% visible)
+          const minLeft = -(elWidth * 0.9)
+          const maxLeft = 1000 - elWidth * 0.1
+          updateProps.left = Math.max(minLeft, Math.min(maxLeft, props.left))
+        }
+        if (props.top !== undefined) {
+          const minTop = -(elHeight * 0.9)
+          const maxTop = 562 - elHeight * 0.1
+          updateProps.top = Math.max(minTop, Math.min(maxTop, props.top))
+        }
+        if (props.width !== undefined) {
+          updateProps.width = Math.max(10, Math.min(1000, props.width))
+        }
+        if (props.height !== undefined) {
+          updateProps.height = Math.max(10, Math.min(562, props.height))
+        }
         if (props.content !== undefined) updateProps.content = props.content
         if (props.fill !== undefined) updateProps.fill = props.fill
         if (props.opacity !== undefined) updateProps.opacity = props.opacity

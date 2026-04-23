@@ -724,7 +724,8 @@ function insertImage(src: string) {
 
 function handleButton(action: string, content: string) {
   if (action === 'undo') {
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))
+    const { undo } = useHistorySnapshot()
+    undo()
     return
   }
 

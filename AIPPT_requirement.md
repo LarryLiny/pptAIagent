@@ -2,8 +2,8 @@
 
 <!--
 @meta
-version: 1.2.0
-last-updated: 2026-04-17 15:00:00
+version: 1.3.0
+last-updated: 2026-04-23 15:00:00
 last-full-rewrite: 2026-04-17
 update-mode: incremental
 source-hash: ai-assistant-files-v2
@@ -230,19 +230,19 @@ AI 消息的 Markdown 渲染规则：
 把标题字号改大一些
 ```
 
-### 4.2 Function Calling 工具
+### 4.2 Function Calling 工具 [Updated 2026-04-23]
 
 AI 通过 OpenAI 兼容的 Function Calling 机制操作 PPT。系统定义了 7 个工具：
 
-| 工具 | 用途 | 关键参数 |
-|------|------|----------|
-| `update_element` | 修改已有元素 | element_id（必填）, left, top, width, height, content, fill, opacity, rotate, lineHeight, paragraphSpace |
-| `add_text_element` | 添加文本 | content（必填）, left, top, width, height, fontSize, color, align, bold, fill, lineHeight |
-| `add_image_element` | 添加图片 | src（必填）, left, top, width, height, radius |
-| `add_slide` | 新建页面 | background_color, remark, elements[]（每个元素含 type/位置/内容） |
-| `delete_element` | 删除元素 | element_id（必填） |
-| `update_slide_background` | 改背景色 | color（必填） |
-| `update_slide_remark` | 改备注 | remark（必填） |
+| 工具 | 用途 | 关键参数 | 边界约束 |
+|------|------|----------|----------|
+| `update_element` | 修改已有元素 | element_id（必填）, left, top, width, height, content, fill, opacity, rotate, lineHeight, paragraphSpace | left/top 自动 clamp 保证元素至少 10% 可见；width/height 限制在 10~1000/562px |
+| `add_text_element` | 添加文本 | content（必填）, left, top, width, height, fontSize, color, align, bold, fill, lineHeight | width 自动 clamp 不超出画布右边界 |
+| `add_image_element` | 添加图片 | src（必填）, left, top, width, height, radius | — |
+| `add_slide` | 新建页面 | background_color, remark, elements[]（每个元素含 type/位置/内容） | — |
+| `delete_element` | 删除元素 | element_id（必填） | — |
+| `update_slide_background` | 改背景色 | color（必填） | — |
+| `update_slide_remark` | 改备注 | remark（必填） | — |
 
 画布坐标系：宽 1000px，高 562px（16:9），左上角为原点。
 
@@ -253,6 +253,19 @@ AI 通过 OpenAI 兼容的 Function Calling 机制操作 PPT。系统定义了 7
 | 首次请求 | 非流式 + tools | 检测 LLM 是否返回 tool_calls |
 | 有 tool_calls | 执行工具 → 流式请求获取总结 | 两次请求 |
 | 无 tool_calls | 直接使用首次请求的文本 | 一次请求，速度快 |
+
+### 4.4 布局优化约束 [Added 2026-04-23]
+
+当用户要求"优化布局"或"调整布局"时，AI 必须遵守以下原则：
+
+| 规则 | 说明 |
+|------|------|
+| 保守原则 | 优先微调位置/对齐，不大幅改动内容和格式 |
+| 不缩小字号 | 除非用户明确要求，否则不减小已有文本的字号 |
+| 不重写内容 | 不改变文本的实际内容，只调整布局属性 |
+| 边界安全 | 元素的 left+width ≤ 1000px，top+height ≤ 562px |
+| 居中计算 | 标题居中使用 left = (1000 - width) / 2，不改变 width |
+| 可读性 | 调整后的文本不应出现截断或溢出画布 |
 
 System Prompt 要点：
 - 角色：专业 PPT 课件制作助手"子言"
@@ -310,9 +323,11 @@ System Prompt 要点：
 
 将标题和正文元素添加到当前选中的幻灯片上（不删除已有元素）。
 
-### 5.4 "撤销"
+### 5.4 "撤销" [Updated 2026-04-23]
 
-触发编辑器的撤销操作（模拟 Ctrl+Z 键盘事件），回退 AI 工具调用造成的修改。
+直接调用编辑器的 `useHistorySnapshot().undo()` 方法，回退 AI 工具调用造成的修改。
+
+> ⚠️ 旧实现通过 `document.dispatchEvent(new KeyboardEvent(...))` 模拟 Ctrl+Z，但由于悬浮对话框获得焦点时 `editorAreaFocus` 为 false，全局快捷键处理器会忽略该事件，导致撤销无效。已改为直接调用 undo API。
 
 ---
 
@@ -413,7 +428,7 @@ System Prompt 要点：
 |------|-----------|----------|
 | AI API Key | 前端硬编码 | 后端代理，Key 不暴露 |
 | 会话存储 | sessionStorage（关闭浏览器丢失） | 后端持久化 |
-| 撤销 | 模拟 Ctrl+Z 键盘事件 | 调用编辑器原生 undo API |
+| 撤销 | 模拟 Ctrl+Z 键盘事件 | ~~调用编辑器原生 undo API~~ 已修复：直接调用 `useHistorySnapshot().undo()` |
 | 内容布局 | 标题+正文两元素 | 支持更丰富模板（左右分栏、图文混排） |
 
 ### 9.2 缺失功能
@@ -465,3 +480,4 @@ System Prompt 要点：
 | 2026-04-17 | full-rewrite | 1.0.0 | 初始生成（含编辑器基座） |
 | 2026-04-17 | full-rewrite | 1.1.0 | 聚焦 AI 助手，移除编辑器基座描述 |
 | 2026-04-17 | incremental | 1.2.0 | 新增本地指令解析器、改进上下文注入、侧边栏布局调整 |
+| 2026-04-23 | incremental | 1.3.0 | 修复撤销按钮无效(5.4)、update_element 边界校验(4.2)、新增布局优化约束(4.4) |
