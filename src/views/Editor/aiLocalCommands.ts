@@ -127,6 +127,158 @@ function emitRichTextCommand(action: RichTextAction | RichTextAction[]) {
 }
 
 /**
+ * Optimize the layout of the current slide.
+ * Analyzes text elements to determine page type (TOC vs title+content),
+ * then adjusts font sizes, widths, and alignment accordingly.
+ */
+function optimizeCurrentSlideLayout(
+  slidesStore: ReturnType<typeof useSlidesStore>,
+  addHistorySnapshot: () => void,
+): LocalCommandResult {
+  const slide = slidesStore.currentSlide
+  if (!slide) return { handled: true, message: '当前没有幻灯片' }
+
+  const SLIDE_W = 1000
+  const SLIDE_H = 562
+  const MARGIN = 50
+
+  const textEls = slide.elements.filter(e => e.type === 'text') as PPTTextElement[]
+  if (textEls.length === 0) return { handled: true, message: '当前页没有文本元素，无需优化' }
+
+  // Extract plain text from HTML
+  const getPlain = (html: string) => {
+    const d = document.createElement('div')
+    d.innerHTML = html
+    return d.textContent || ''
+  }
+
+  // Sort by vertical position (top first)
+  const sorted = [...textEls].sort((a, b) => a.top - b.top)
+  const texts = sorted.map(el => ({ el, plain: getPlain(el.content) }))
+
+  // Classify page type
+  // TOC: all text elements are short (< 40 chars) and there are 3+ of them
+  const allShort = texts.every(t => t.plain.length < 40)
+  const isTOC = allShort && texts.length >= 3
+
+  // Title + content: first element is short (title), rest is longer content
+  // Or just 2 elements: title + body
+  const isTitleContent = !isTOC && texts.length >= 2 && texts[0].plain.length < 50
+
+  const changes: string[] = []
+
+  if (isTOC) {
+    // --- TOC mode: all items 40px, centered ---
+    for (const { el } of texts) {
+      const newContent = changeHtmlFontSize(el.content, 40)
+      const centeredContent = changeHtmlAlign(newContent, 'center')
+      // Center horizontally: width = SLIDE_W - 2*MARGIN, left = MARGIN
+      slidesStore.updateElement({
+        id: el.id,
+        props: {
+          content: centeredContent,
+          left: MARGIN,
+          width: SLIDE_W - MARGIN * 2,
+        } as any,
+      })
+    }
+
+    // Distribute vertically: evenly space all elements
+    const totalElements = texts.length
+    const itemHeight = 60 // estimated height per item at 40px
+    const totalHeight = totalElements * itemHeight
+    const startY = Math.max(MARGIN, (SLIDE_H - totalHeight) / 2)
+    const gap = totalElements > 1 ? (SLIDE_H - startY * 2 - itemHeight) / (totalElements - 1) : 0
+
+    for (let i = 0; i < sorted.length; i++) {
+      const el = sorted[i]
+      const newTop = totalElements === 1 ? (SLIDE_H - itemHeight) / 2 : startY + i * gap
+      slidesStore.updateElement({
+        id: el.id,
+        props: { top: Math.round(newTop), height: itemHeight } as any,
+      })
+    }
+    changes.push(`目录模式：${totalElements} 个条目，字号 40px，居中排列`)
+  }
+  else if (isTitleContent) {
+    // --- Title + Content mode ---
+    const titleEl = sorted[0]
+    const contentEls = sorted.slice(1)
+
+    // Title: 40px, full width from its left position
+    const titleLeft = titleEl.left
+    const titleWidth = SLIDE_W - titleLeft - MARGIN
+    const newTitleContent = changeHtmlFontSize(titleEl.content, 40)
+    slidesStore.updateElement({
+      id: titleEl.id,
+      props: {
+        content: newTitleContent,
+        width: titleWidth,
+        height: 68,
+      } as any,
+    })
+    changes.push('标题：40px')
+
+    // Content elements: adaptive font size 24-32px
+    for (const contentEl of contentEls) {
+      const plain = getPlain(contentEl.content)
+      const contentLeft = contentEl.left
+      const contentWidth = SLIDE_W - contentLeft - MARGIN
+      const availHeight = SLIDE_H - contentEl.top - 30
+
+      // Estimate best font size (32px default, shrink if needed)
+      const lines = plain.split(/\n/).filter(l => l.trim())
+      const longestLine = lines.reduce((max, l) => l.length > max.length ? l : max, '')
+      let fontSize = 32
+
+      while (fontSize > 24) {
+        // Check horizontal: estimate if longest line fits
+        let estWidth = 0
+        for (const ch of longestLine) {
+          estWidth += /[\u4e00-\u9fff]/.test(ch) ? fontSize : fontSize * 0.55
+        }
+        // Check vertical: estimate total height
+        const lineHeight = fontSize <= 24 ? 1.4 : fontSize <= 28 ? 1.5 : 1.6
+        const estHeight = lines.length * fontSize * lineHeight
+
+        if (estWidth <= contentWidth && estHeight <= availHeight) break
+        fontSize -= 2
+      }
+      fontSize = Math.max(24, fontSize)
+
+      const newContent = changeHtmlFontSize(contentEl.content, fontSize)
+      slidesStore.updateElement({
+        id: contentEl.id,
+        props: {
+          content: newContent,
+          width: contentWidth,
+        } as any,
+      })
+      changes.push(`内容：${fontSize}px`)
+    }
+  }
+  else {
+    // --- Single element or unclear structure: just fix widths ---
+    for (const { el } of texts) {
+      const elWidth = SLIDE_W - el.left - MARGIN
+      if (el.width > elWidth || el.left + el.width > SLIDE_W) {
+        slidesStore.updateElement({
+          id: el.id,
+          props: { width: elWidth } as any,
+        })
+        changes.push(`修正宽度：${el.id}`)
+      }
+    }
+    if (changes.length === 0) {
+      return { handled: true, message: '当前页布局已经合理，无需调整' }
+    }
+  }
+
+  addHistorySnapshot()
+  return { handled: true, message: `布局优化完成：${changes.join('、')}` }
+}
+
+/**
  * Try to parse and execute a local command.
  * Returns { handled: true, message } if handled locally.
  * Returns { handled: false } if should be sent to LLM.
@@ -334,6 +486,11 @@ export function tryLocalCommand(input: string): LocalCommandResult {
       propsChanged.fill = color
       results.push(`填充→${color}`)
     }
+  }
+
+  // --- Optimize layout (page-level, exclusive command) ---
+  if (/优化.{0,2}布局|调整.{0,2}布局|排版优化|优化.{0,2}排版|整理.{0,2}布局/.test(text) && results.length === 0) {
+    return optimizeCurrentSlideLayout(slidesStore, addHistorySnapshot)
   }
 
   // --- Delete (exclusive — don't combine with other ops) ---
