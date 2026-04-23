@@ -213,27 +213,22 @@ export function describeTemplates(): string {
  * Uses template size as maximum, scales down for longer content.
  */
 function adaptTitleSize(title: string, maxSize: number): number {
-  // Cap template size — AI-inserted titles shouldn't exceed 28px
-  const cap = Math.min(maxSize, 28)
   const len = title.length
-  if (len <= 10) return cap
-  if (len <= 20) return Math.min(cap, 26)
-  if (len <= 40) return Math.min(cap, 24)
-  if (len <= 60) return Math.min(cap, 22)
-  return 20
+  if (len <= 20) return Math.max(40, maxSize)
+  if (len <= 40) return Math.max(36, Math.min(maxSize, 40))
+  if (len <= 60) return Math.max(32, Math.min(maxSize, 36))
+  return 28 // Very long title
 }
 
 function adaptBodySize(body: string, maxSize: number): number {
-  // Cap template size — AI-inserted body shouldn't exceed 18px
-  const cap = Math.min(maxSize, 18)
   const totalChars = body.length
   const lineCount = body.split('\n').filter(l => l.trim()).length
 
-  if (totalChars < 200 && lineCount <= 8) return cap
-  if (totalChars < 400 && lineCount <= 12) return Math.min(cap, 16)
-  if (totalChars < 700 && lineCount <= 18) return Math.min(cap, 15)
-  if (totalChars < 1000) return Math.min(cap, 14)
-  return Math.min(cap, 13)
+  if (totalChars < 200 && lineCount <= 8) return Math.max(32, maxSize)
+  if (totalChars < 400 && lineCount <= 12) return Math.max(28, Math.min(maxSize, 32))
+  if (totalChars < 700 && lineCount <= 18) return Math.max(24, Math.min(maxSize, 28))
+  if (totalChars < 1000) return Math.max(20, Math.min(maxSize, 24))
+  return Math.max(18, Math.min(maxSize, 22)) // Very dense content
 }
 
 /**
@@ -266,8 +261,8 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   const bodyAlign = template?.bodyLayout?.align || 'left'
 
   // Template font sizes as MAX reference (not fixed)
-  const templateTitleSize = template?.titleLayout?.fontSize || 28
-  const templateBodySize = template?.bodyLayout?.fontSize || 18
+  const templateTitleSize = template?.titleLayout?.fontSize || 40
+  const templateBodySize = template?.bodyLayout?.fontSize || 32
 
   // Dynamic font sizing based on content length
   const titleSize = title ? adaptTitleSize(title, templateTitleSize) : templateTitleSize
@@ -287,7 +282,7 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   }
 
   const fn = (f: string) => f ? ` font-family: ${f};` : ''
-  const titleH = titleSize <= 24 ? 44 : 52
+  const titleH = titleSize <= 32 ? 56 : 68
 
   if (title && body) {
     const tl = template?.titleLayout
@@ -309,14 +304,14 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
     const bWidth = availableWidth(bLeft)
     const bHeight = SLIDE_H - bTop - 30
     // Adjust line height for dense content
-    const lineHeight = bodySize <= 14 ? 1.4 : bodySize <= 16 ? 1.5 : 1.6
+    const lineHeight = bodySize <= 24 ? 1.4 : bodySize <= 28 ? 1.5 : 1.6
 
     elements.push({
       type: 'text', id: nanoid(10),
       left: bLeft, top: bTop, width: bWidth, height: bHeight, rotate: 0,
       content: bodyToHtml(body, bodySize, bodyColor, bodyFont, titleColor, bodyAlign),
       defaultFontName: bodyFont, defaultColor: bodyColor,
-      lineHeight, paragraphSpace: bodySize <= 14 ? 2 : 4, fill: '', outline: { color: '', width: 0, style: 'solid' },
+      lineHeight, paragraphSpace: bodySize <= 24 ? 3 : 5, fill: '', outline: { color: '', width: 0, style: 'solid' },
     } as PPTTextElement)
   }
   else if (title) {
@@ -371,8 +366,8 @@ function bodyToHtml(body: string, fontSize: number, color: string, fontName: str
 export function extractTemplate() {
   return getTemplateForType('content') || {
     background: { type: 'solid' as const, color: '#ffffff' },
-    titleStyle: { fontSize: 28, color: '#2d2d2d', fontName: '', bold: true, align: 'left', left: 50, top: 50, width: 900, height: 52 },
-    bodyStyle: { fontSize: 18, color: '#444444', fontName: '', align: 'left', left: 50, top: 120, width: 900, height: 400, lineHeight: 1.6 },
+    titleStyle: { fontSize: 40, color: '#2d2d2d', fontName: '', bold: true, align: 'left', left: 50, top: 50, width: 900, height: 68 },
+    bodyStyle: { fontSize: 32, color: '#444444', fontName: '', align: 'left', left: 50, top: 120, width: 900, height: 400, lineHeight: 1.6 },
     themeColor: '#5b9bd5',
     decorativeElements: [],
   }
