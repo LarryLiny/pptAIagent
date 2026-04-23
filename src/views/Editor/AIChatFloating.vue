@@ -731,11 +731,11 @@ onMounted(() => {
 .floating-chat {
   pointer-events: all;
   position: absolute;
-  width: 400px; max-height: 700px;
+  width: 400px; max-height: 780px;
   background: #fff; border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
   display: flex; flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid #e5e7eb;
 }
 
@@ -756,7 +756,7 @@ onMounted(() => {
 }
 
 .float-messages {
-  flex: 1; overflow-y: auto; padding: 12px; min-height: 120px; max-height: 480px;
+  flex: 1; overflow-y: auto; padding: 12px; min-height: 120px; max-height: 560px;
 
   .welcome-msg {
     text-align: center; padding: 30px 0;
