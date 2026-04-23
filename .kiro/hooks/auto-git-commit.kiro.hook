@@ -1,13 +1,13 @@
 {
   "enabled": true,
-  "name": "Auto Git Commit",
-  "description": "每次 agent 执行完成后，自动将所有变更提交到本地 git",
+  "name": "对话完成自动提交",
+  "description": "每轮对话结束后，自动将所有变更提交到 git，commit message 用中文描述本次改了哪些地方、哪些文件受影响。",
   "version": "1",
   "when": {
     "type": "agentStop"
   },
   "then": {
-    "type": "runCommand",
-    "command": "git add -A && git diff --cached --quiet || git commit -m \"auto: update from conversation\""
+    "type": "askAgent",
+    "prompt": "检查是否有未提交的文件变更（用 git status --short）。如果有变更，执行以下操作：\n1. git add -A\n2. 用中文编写 commit message，格式为：「改动摘要：具体改了什么功能/修了什么问题。影响文件：列出主要变更的文件名」\n3. 执行 git commit -m \"你写的中文commit message\"\n\n如果没有变更，什么都不做。\n注意：不要 push，只 commit。"
   }
 }
