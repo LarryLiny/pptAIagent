@@ -213,24 +213,27 @@ export function describeTemplates(): string {
  * Uses template size as maximum, scales down for longer content.
  */
 function adaptTitleSize(title: string, maxSize: number): number {
+  // Cap template size — AI-inserted titles shouldn't exceed 28px
+  const cap = Math.min(maxSize, 28)
   const len = title.length
-  if (len <= 20) return Math.max(24, maxSize)
-  if (len <= 40) return Math.max(22, Math.min(maxSize, 26))
-  if (len <= 60) return Math.max(20, Math.min(maxSize, 22))
-  return 20 // Very long title
+  if (len <= 10) return cap
+  if (len <= 20) return Math.min(cap, 26)
+  if (len <= 40) return Math.min(cap, 24)
+  if (len <= 60) return Math.min(cap, 22)
+  return 20
 }
 
 function adaptBodySize(body: string, maxSize: number): number {
+  // Cap template size — AI-inserted body shouldn't exceed 18px
+  const cap = Math.min(maxSize, 18)
   const totalChars = body.length
   const lineCount = body.split('\n').filter(l => l.trim()).length
 
-  // Estimate: how much content fits in the body area (~900×400px)
-  // At 18px with 1.6 line height, roughly 20 lines × 50 chars = 1000 chars
-  if (totalChars < 200 && lineCount <= 8) return Math.max(16, maxSize)
-  if (totalChars < 400 && lineCount <= 12) return Math.max(15, Math.min(maxSize, 17))
-  if (totalChars < 700 && lineCount <= 18) return Math.max(14, Math.min(maxSize, 16))
-  if (totalChars < 1000) return Math.max(13, Math.min(maxSize, 15))
-  return Math.max(12, Math.min(maxSize, 14)) // Very dense content
+  if (totalChars < 200 && lineCount <= 8) return cap
+  if (totalChars < 400 && lineCount <= 12) return Math.min(cap, 16)
+  if (totalChars < 700 && lineCount <= 18) return Math.min(cap, 15)
+  if (totalChars < 1000) return Math.min(cap, 14)
+  return Math.min(cap, 13)
 }
 
 /**
