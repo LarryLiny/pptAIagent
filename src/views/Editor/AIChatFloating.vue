@@ -96,13 +96,19 @@
 
       <!-- Input -->
       <div class="float-input">
-        <input
-          v-model="inputText"
-          @keydown.enter="send"
-          :placeholder="currentTool ? `输入需求，${currentTool}...` : '输入消息...'"
-          class="input-field"
-          ref="inputRef"
-        />
+        <div class="input-wrap" @click="focusInput">
+          <template v-if="currentTool">
+            <span class="input-chip tool-chip-tag" v-html="TOOL_ICONS[currentTool]"></span>
+            <span class="input-chip" v-for="(val, key) in toolSettings" :key="key">{{ val }}</span>
+          </template>
+          <input
+            v-model="inputText"
+            @keydown.enter="send"
+            :placeholder="currentTool ? '补充需求（可选）...' : '输入消息...'"
+            class="input-field"
+            ref="inputRef"
+          />
+        </div>
         <button
           class="mic-btn"
           :class="{ recording: isRecording }"
@@ -111,7 +117,7 @@
           <svg v-if="!isRecording" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
         </button>
-        <button class="send-btn" :disabled="!inputText.trim() || isStreaming" @click="send">
+        <button class="send-btn" :disabled="(!inputText.trim() && !currentTool) || isStreaming" @click="send">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
@@ -309,7 +315,7 @@ function selectTool(t: string) {
   const settings = TOOL_SETTINGS[t]
   if (settings) settings.forEach(s => { defs[s.key] = s.options[0] })
   toolSettings.value = defs
-  inputText.value = buildToolDisplayText(t, defs)
+  inputText.value = ''  // Clear input — chips show the settings
   nextTick(() => inputRef.value?.focus())
 }
 
@@ -321,27 +327,11 @@ function clearTool() {
 }
 
 function updateToolSetting(key: string, val: string) {
-  toolSettings.value[key] = val
-  if (currentTool.value) {
-    inputText.value = buildToolDisplayText(currentTool.value, toolSettings.value)
-  }
-}
-
-// Short display text shown in input box (user-facing)
-function buildToolDisplayText(tool: string, s: Record<string, string>): string {
-  switch (tool) {
-    case '生成课堂引入': return `生成课堂引入，${s.introType || '情境导入'}，${s.difficulty || '适中'}难度`
-    case '搜索背景知识': return `搜索背景知识，${s.sourceType || '外研社素材库'}，${s.difficulty || '适中'}难度`
-    case '例题生成': return `例题生成，${s.count || '2题'}${s.qtype || '选择题'}，${s.difficulty || '基础'}难度`
-    case '互动环节设计': return `互动环节设计，${s.form || '小组讨论'}，${s.duration || '10分钟'}`
-    case '总结要点': return `总结要点，${s.scope || '全部课件'}，${s.format || '要点列表'}`
-    case '生成演讲稿': return `生成演讲稿，${s.style || '正式'}风格，${s.duration || '5分钟'}`
-    default: return tool
-  }
+  toolSettings.value = { ...toolSettings.value, [key]: val }
+  // Chips update automatically via reactive binding, no need to touch inputText
 }
 
 // Full prompt sent to AI (hidden from user)
-
 function buildToolPrompt(tool: string, s: Record<string, string>): string {
   switch (tool) {
     case '生成课堂引入': return `请结合朗文英语教学实践的ESA教学法（Engage投入阶段），以${s.introType || '情境导入'}方式，设计一段${s.difficulty || '适中'}难度的课堂引入。
@@ -391,6 +381,10 @@ function scrollToBottom() {
   })
 }
 
+function focusInput() {
+  inputRef.value?.focus()
+}
+
 // LLM chat history per session
 function buildChatHistory() {
   const session = activeSession.value
@@ -417,19 +411,19 @@ async function send() {
   const toolSettingsSnapshot = { ...toolSettings.value }
   const selectedElId = mainStore.handleElementId || undefined
 
-  // Build what the user sees in chat (short display text)
-  const displayText = txt
-
-  // Build what actually gets sent to AI
+  // Build what the user sees in chat (chips summary + extra text)
+  let displayText: string
   let aiContent: string
+
   if (tool) {
+    const chipValues = Object.values(toolSettingsSnapshot).join('，')
+    const userExtra = txt.trim()
+    displayText = userExtra ? `${tool}：${chipValues}｜${userExtra}` : `${tool}：${chipValues}`
     const fullPrompt = buildToolPrompt(tool, toolSettingsSnapshot)
-    // Check if user modified the display text or added extra content
-    const defaultDisplay = buildToolDisplayText(tool, toolSettingsSnapshot)
-    const userExtra = txt.replace(defaultDisplay, '').trim()
     aiContent = userExtra ? `${fullPrompt}\n\n补充要求：${userExtra}` : fullPrompt
   }
   else {
+    displayText = txt
     aiContent = txt
   }
 
@@ -908,12 +902,28 @@ onMounted(() => {
 .float-input {
   display: flex; gap: 6px; padding: 10px 14px;
   border-top: 1px solid #e5e7eb; flex-shrink: 0;
+  align-items: flex-end;
 
-  .input-field {
-    flex: 1; height: 34px; padding: 0 10px;
+  .input-wrap {
+    flex: 1; min-height: 34px; padding: 4px 8px;
     border: 1px solid #d1d5db; border-radius: 6px;
-    font-size: 12px; outline: none;
-    &:focus { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,0.15); }
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+    cursor: text;
+    &:focus-within { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,0.15); }
+  }
+  .input-chip {
+    display: inline-flex; align-items: center; gap: 2px;
+    padding: 2px 8px; background: #ede9fe; color: #7c3aed;
+    border-radius: 4px; font-size: 10px; font-weight: 500;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .tool-chip-tag {
+    padding: 2px 4px; background: #8b5cf6; color: #fff; border-radius: 4px;
+  }
+  .input-field {
+    flex: 1; min-width: 60px; height: 24px; padding: 0 2px;
+    border: none; outline: none; font-size: 12px;
+    background: transparent;
   }
   .send-btn {
     width: 34px; height: 34px; border-radius: 6px;
