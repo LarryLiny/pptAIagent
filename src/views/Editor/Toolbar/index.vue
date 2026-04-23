@@ -265,8 +265,14 @@ const currentPanelComponent = computed(() => {
 }
 
 @keyframes ai-pulse {
-  0%, 100% { opacity: 0.85; filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.2)); }
-  50% { opacity: 1; filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.45)); }
+  0%, 100% {
+    opacity: 0.85;
+    filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.2));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.45));
+  }
 }
 
 @keyframes ai-rotate {
@@ -277,7 +283,6 @@ const currentPanelComponent = computed(() => {
 @keyframes ai-twinkle {
   0%, 100% { opacity: 0.7; transform: scale(1); }
   50% { opacity: 0.3; transform: scale(0.6); }
-}
 }
 
 .content {
