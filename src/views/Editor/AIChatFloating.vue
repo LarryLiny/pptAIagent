@@ -147,6 +147,7 @@ import {
   getActiveSession, addMessageToSession, saveSessions,
   closeFloating as closeFloat,
 } from './aiChatStore'
+import type { MsgButton } from './aiChatStore'
 import { buildTemplatedSlide, describeTemplates, analyzeTemplates } from './aiSlideTemplate'
 import type { Slide, PPTTextElement } from '@/types/slides'
 
@@ -564,33 +565,30 @@ async function send() {
       // Check if response contains PPT content separator
       if (fullText.includes('---PPT_CONTENT---')) {
         const [chatPart, pptPart] = fullText.split('---PPT_CONTENT---')
-        // First message: AI's natural language reply (no insert buttons)
-        aiMsg.content = chatPart.trim()
+        // First message: AI's natural language reply (strip content type marker)
+        const { content: chatContent } = parseContentType(chatPart)
+        aiMsg.content = chatContent
         aiMsg.buttons = []
 
-        // Second message: PPT content card (with insert buttons)
+        // Second message: PPT content card (with insert buttons based on content type)
         if (pptPart?.trim()) {
+          const { content: pptContent, contentType } = parseContentType(pptPart)
           session.messages.push({
             id: Date.now().toString() + Math.random().toString(36).slice(2),
             type: 'ai',
-            content: pptPart.trim(),
+            content: pptContent,
             timestamp: new Date(),
             _btnsVisible: true,
-            _isSlideContent: true,
-            buttons: [
-              { label: '插入当前页', action: 'insert' },
-              { label: '新建页插入', action: 'agree' },
-            ],
+            _isSlideContent: contentType === 'slide',
+            buttons: getButtonsForType(contentType),
           })
         }
       }
       else {
-        // No separator — show as regular reply with insert buttons
-        aiMsg.content = fullText
-        aiMsg.buttons = [
-          { label: '插入当前页', action: 'insert' },
-          { label: '新建页插入', action: 'agree' },
-        ]
+        // No separator — parse content type from the full text
+        const { content: cleanText, contentType } = parseContentType(fullText)
+        aiMsg.content = cleanText
+        aiMsg.buttons = getButtonsForType(contentType)
       }
     }
   }
@@ -647,6 +645,38 @@ function parseContent(content: string): { title: string; body: string } {
   return { title, body }
 }
 
+// Strip content type marker from text and return the type
+function parseContentType(text: string): { content: string; contentType: 'chat' | 'slide' | 'note' } {
+  const marker = text.match(/---CONTENT_TYPE:(chat|slide|note)---\s*$/)
+  if (marker) {
+    return {
+      content: text.replace(/\s*---CONTENT_TYPE:(chat|slide|note)---\s*$/, '').trim(),
+      contentType: marker[1] as 'chat' | 'slide' | 'note',
+    }
+  }
+  // Fallback: no marker found, try to guess
+  return { content: text.trim(), contentType: 'chat' }
+}
+
+// Get buttons based on content type
+function getButtonsForType(contentType: 'chat' | 'slide' | 'note'): MsgButton[] {
+  switch (contentType) {
+    case 'slide':
+      return [
+        { label: '插入当前页', action: 'insert' },
+        { label: '新建页插入', action: 'agree' },
+      ]
+    case 'note':
+      return [
+        { label: '插入为备注', action: 'note' },
+        { label: '新建页插入', action: 'agree' },
+      ]
+    case 'chat':
+    default:
+      return []
+  }
+}
+
 function insertImage(src: string) {
   // Use createImageElement which auto-sizes and centers
   try {
@@ -699,6 +729,22 @@ function handleButton(action: string, content: string) {
   else if (action === 'agree') {
     const slide = buildTemplatedSlide(title, body)
     addSlidesFromData([slide])
+  }
+  else if (action === 'note') {
+    // Insert content as speaker notes (备注) on the current slide
+    const currentSlide = slidesStore.currentSlide
+    if (currentSlide) {
+      // Strip markdown formatting for plain-text notes
+      const noteText = content
+        .replace(/^#{1,3}\s+/gm, '')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .trim()
+      const existingNotes = currentSlide.remark || ''
+      const newNotes = existingNotes ? `${existingNotes}\n\n${noteText}` : noteText
+      slidesStore.updateSlide({ remark: newNotes })
+      addHistorySnapshot()
+    }
   }
 }
 
