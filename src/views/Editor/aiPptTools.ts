@@ -443,12 +443,17 @@ export function executeTool(name: string, args: Record<string, any>): string {
         const isHtml = content.includes('<') && content.includes('>')
         const htmlContent = isHtml ? content : `<p style="text-align: ${align};"><span style="font-size: ${fontSize}px; color: ${color}; ${bold}">${content}</span></p>`
 
+        // Clamp width so left + width <= 1000 (canvas width)
+        const left = args.left ?? 60
+        const maxWidth = 1000 - left
+        const width = Math.min(args.width ?? 880, maxWidth)
+
         const el: PPTTextElement = {
           type: 'text',
           id: nanoid(10),
-          left: args.left ?? 60,
+          left,
           top: args.top ?? 200,
-          width: args.width ?? 880,
+          width,
           height: args.height ?? 100,
           rotate: 0,
           content: htmlContent,
@@ -492,12 +497,16 @@ export function executeTool(name: string, args: Record<string, any>): string {
               const isHtml = content.includes('<') && content.includes('>')
               const htmlContent = isHtml ? content : `<p style="text-align: ${align};"><span style="font-size: ${fontSize}px; color: ${color}; ${bold}">${content}</span></p>`
 
+              // Clamp width so left + width <= 1000
+              const elLeft = item.left ?? 60
+              const elWidth = Math.min(item.width ?? 880, 1000 - elLeft)
+
               elements.push({
                 type: 'text',
                 id: nanoid(10),
-                left: item.left ?? 60,
+                left: elLeft,
                 top: item.top ?? 60,
-                width: item.width ?? 880,
+                width: elWidth,
                 height: item.height ?? 100,
                 rotate: 0,
                 content: htmlContent,

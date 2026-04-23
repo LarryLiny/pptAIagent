@@ -249,6 +249,9 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   const SLIDE_W = 1000, SLIDE_H = 562, MARGIN = 50
   const contentW = SLIDE_W - MARGIN * 2
 
+  // Clamp helper: ensure left + width <= SLIDE_W
+  const clampWidth = (left: number, width: number) => Math.min(width, SLIDE_W - left)
+
   // Colors and fonts from template (safe defaults)
   const titleColor = safeColor(template?.titleLayout?.color || '', '#2d2d2d')
   const bodyColor = safeColor(template?.bodyLayout?.color || '', '#444444')
@@ -286,7 +289,7 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
     const tl = template?.titleLayout
     const tLeft = tl ? tl.left : MARGIN
     const tTop = tl ? tl.top : MARGIN
-    const tWidth = Math.max(contentW, tl?.width || 0)
+    const tWidth = clampWidth(tLeft, Math.min(contentW, tl?.width || contentW))
 
     elements.push({
       type: 'text', id: nanoid(10),
@@ -299,7 +302,7 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
     const bl = template?.bodyLayout
     const bTop = bl ? bl.top : tTop + titleH + 16
     const bLeft = bl ? bl.left : MARGIN
-    const bWidth = Math.max(contentW, bl?.width || 0)
+    const bWidth = clampWidth(bLeft, Math.min(contentW, bl?.width || contentW))
     const bHeight = SLIDE_H - bTop - 30
     // Adjust line height for dense content
     const lineHeight = bodySize <= 14 ? 1.4 : bodySize <= 16 ? 1.5 : 1.6
@@ -314,10 +317,12 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   }
   else if (title) {
     const tl = template?.titleLayout
+    const tLeft = tl?.left || MARGIN
+    const tWidth = clampWidth(tLeft, Math.min(contentW, tl?.width || contentW))
     elements.push({
       type: 'text', id: nanoid(10),
-      left: tl?.left || MARGIN, top: (SLIDE_H - titleH) / 2,
-      width: Math.max(contentW, tl?.width || 0), height: titleH, rotate: 0,
+      left: tLeft, top: (SLIDE_H - titleH) / 2,
+      width: tWidth, height: titleH, rotate: 0,
       content: `<p style="text-align: center;"><span style="font-size: ${titleSize + 4}px; color: ${titleColor}; font-weight: bold;${fn(titleFont)}">${title}</span></p>`,
       defaultFontName: titleFont, defaultColor: titleColor,
       lineHeight: 1.3, fill: '', outline: { color: '', width: 0, style: 'solid' },
