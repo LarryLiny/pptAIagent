@@ -411,6 +411,13 @@ function buildChatHistory() {
 
 async function send() {
   if ((!inputText.value.trim() && !currentTool.value) || isStreaming.value || !activeSession.value) return
+
+  // Stop recording if active
+  if (isRecording.value && recognition) {
+    recognition.stop()
+    isRecording.value = false
+  }
+
   const txt = inputText.value
   const sessionId = activeSession.value.id
   const tool = currentTool.value
@@ -756,7 +763,7 @@ onMounted(() => {
 }
 
 .float-messages {
-  flex: 1; overflow-y: auto; padding: 12px; min-height: 150px; max-height: 480px;
+  flex: 1; overflow-y: auto; padding: 12px; min-height: 180px; max-height: 480px;
 
   .welcome-msg {
     text-align: center; padding: 30px 0;

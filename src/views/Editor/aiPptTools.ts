@@ -61,7 +61,15 @@ Good morning, class! Today we will explore how to protect our planet.
 - 只有用户明确说"插入"、"添加到页面"时，才使用add_text_element或add_slide工具
 - 修改已有元素的格式（字号、颜色、位置等）可以直接用update_element工具执行
 - 用户输入可能有错别字或口语化表达，请理解真实意图并执行。例如：
-  "子号改大"→字号改大，"颜色改层红色"→颜色改成红色，"加醋"→加粗，"剧中"→居中`
+  "子号改大"→字号改大，"颜色改层红色"→颜色改成红色，"加醋"→加粗，"剧中"→居中
+
+## PPT内容长度限制（非常重要！）
+生成的PPT内容必须控制长度，因为要插入到一页幻灯片中（1000×562px）：
+- 标题：不超过20个字
+- 正文总量：不超过300字（中文）或150词（英文）
+- 列表项：每项不超过30字，最多8项
+- 如果内容确实很多，优先精简，用要点概括，不要长篇大论
+- 宁可内容精炼，也不要塞满整页`
 
 // Serialize current slide elements for LLM context — rich detail for selected element
 export function describeCurrentSlide(selectedElementId?: string): string {
