@@ -209,26 +209,65 @@ export function describeTemplates(): string {
 }
 
 /**
- * Dynamic font size adaptation based on content length.
- * Uses template size as maximum, scales down for longer content.
+ * Dynamic font size adaptation based on content length AND available width.
+ * Ensures title fits in one line, body fits within available height.
  */
-function adaptTitleSize(title: string, maxSize: number): number {
-  const len = title.length
-  if (len <= 20) return Math.max(40, maxSize)
-  if (len <= 40) return Math.max(36, Math.min(maxSize, 40))
-  if (len <= 60) return Math.max(32, Math.min(maxSize, 36))
-  return 28 // Very long title
+
+// Approximate character width ratio: for mixed CJK/Latin text,
+// average char width ≈ fontSize * 0.55 (CJK ≈ 1.0, Latin ≈ 0.5, blended)
+// Bold adds ~10% width
+function estimateTextWidth(text: string, fontSize: number, bold: boolean = false): number {
+  let width = 0
+  for (const ch of text) {
+    // CJK characters are roughly square (width ≈ fontSize)
+    if (/[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/.test(ch)) {
+      width += fontSize * 1.0
+    }
+    else {
+      width += fontSize * 0.55
+    }
+  }
+  if (bold) width *= 1.1
+  return width
 }
 
-function adaptBodySize(body: string, maxSize: number): number {
-  const totalChars = body.length
-  const lineCount = body.split('\n').filter(l => l.trim()).length
+function adaptTitleSize(title: string, maxSize: number, availWidth: number, bold: boolean = true): number {
+  // Default is 40px. Only shrink if it doesn't fit in one line.
+  const defaultSize = 40
+  let size = Math.max(defaultSize, maxSize)
+  const minSize = 28 // Never go below 28px for titles
 
-  if (totalChars < 200 && lineCount <= 8) return Math.max(32, maxSize)
-  if (totalChars < 400 && lineCount <= 12) return Math.max(28, Math.min(maxSize, 32))
-  if (totalChars < 700 && lineCount <= 18) return Math.max(24, Math.min(maxSize, 28))
-  if (totalChars < 1000) return Math.max(20, Math.min(maxSize, 24))
-  return Math.max(18, Math.min(maxSize, 22)) // Very dense content
+  // Check if default size fits — if so, just use it
+  if (estimateTextWidth(title, size, bold) <= availWidth) return size
+
+  // Shrink until it fits
+  while (size > minSize) {
+    size -= 2
+    if (estimateTextWidth(title, size, bold) <= availWidth) break
+  }
+  return Math.max(minSize, size)
+}
+
+function adaptBodySize(body: string, maxSize: number, availWidth: number, availHeight: number): number {
+  const lines = body.split('\n').filter(l => l.trim())
+  const longestLine = lines.reduce((max, l) => l.length > max.length ? l : max, '')
+
+  // Default is 32px. Only shrink if content overflows.
+  const defaultSize = 32
+  let size = Math.max(defaultSize, maxSize)
+  const minSize = 24 // Never go below 24px for body
+
+  while (size > minSize) {
+    // Check horizontal fit: longest line should not wrap
+    const estLineWidth = estimateTextWidth('• ' + longestLine, size)
+    // Check vertical fit: all lines should fit in available height
+    const lineHeight = size <= 24 ? 1.4 : size <= 28 ? 1.5 : 1.6
+    const estTotalHeight = lines.length * size * lineHeight + (lines.length - 1) * (size <= 24 ? 3 : 5)
+
+    if (estLineWidth <= availWidth && estTotalHeight <= availHeight) break
+    size -= 2
+  }
+  return Math.max(minSize, size)
 }
 
 /**
@@ -264,9 +303,7 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   const templateTitleSize = template?.titleLayout?.fontSize || 40
   const templateBodySize = template?.bodyLayout?.fontSize || 32
 
-  // Dynamic font sizing based on content length
-  const titleSize = title ? adaptTitleSize(title, templateTitleSize) : templateTitleSize
-  const bodySize = body ? adaptBodySize(body, templateBodySize) : templateBodySize
+  // Dynamic font sizing is done per-branch below (needs width/height info)
 
   const bg: SlideBackground = template?.background
     ? JSON.parse(JSON.stringify(template.background))
@@ -282,13 +319,16 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   }
 
   const fn = (f: string) => f ? ` font-family: ${f};` : ''
-  const titleH = titleSize <= 32 ? 56 : 68
 
   if (title && body) {
     const tl = template?.titleLayout
     const tLeft = tl ? tl.left : MARGIN
     const tTop = tl ? tl.top : MARGIN
     const tWidth = availableWidth(tLeft)
+
+    // Dynamic font sizing based on content AND available space
+    const titleSize = title ? adaptTitleSize(title, templateTitleSize, tWidth, titleBold) : templateTitleSize
+    const titleH = titleSize <= 28 ? 48 : titleSize <= 36 ? 60 : 72
 
     elements.push({
       type: 'text', id: nanoid(10),
@@ -302,7 +342,9 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
     const bTop = bl ? bl.top : tTop + titleH + 16
     const bLeft = bl ? bl.left : MARGIN
     const bWidth = availableWidth(bLeft)
-    const bHeight = SLIDE_H - bTop - 30
+    const bAvailHeight = SLIDE_H - bTop - 30
+    const bodySize = body ? adaptBodySize(body, templateBodySize, bWidth, bAvailHeight) : templateBodySize
+    const bHeight = bAvailHeight
     // Adjust line height for dense content
     const lineHeight = bodySize <= 24 ? 1.4 : bodySize <= 28 ? 1.5 : 1.6
 
@@ -318,6 +360,8 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
     const tl = template?.titleLayout
     const tLeft = tl?.left || MARGIN
     const tWidth = availableWidth(tLeft)
+    const titleSize = adaptTitleSize(title, templateTitleSize, tWidth, true)
+    const titleH = titleSize <= 28 ? 48 : titleSize <= 36 ? 60 : 72
     elements.push({
       type: 'text', id: nanoid(10),
       left: tLeft, top: (SLIDE_H - titleH) / 2,
@@ -330,6 +374,7 @@ export function buildTemplatedSlide(title: string, body: string, _template?: any
   else if (body) {
     const bodyH = Math.min(SLIDE_H - MARGIN * 2, 420)
     const bodyTop = (SLIDE_H - bodyH) / 2
+    const bodySize = adaptBodySize(body, templateBodySize, contentW, bodyH)
     elements.push({
       type: 'text', id: nanoid(10),
       left: MARGIN, top: bodyTop, width: contentW, height: bodyH, rotate: 0,
