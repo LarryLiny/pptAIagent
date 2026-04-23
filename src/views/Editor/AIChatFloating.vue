@@ -55,12 +55,18 @@
         </div>
       </div>
 
-      <!-- Tool settings panel -->
-      <div class="tool-settings" v-if="showSettings && currentToolSettings">
-        <div v-for="s in currentToolSettings" :key="s.key" class="setting-row">
-          <span class="setting-label">{{ s.label }}</span>
-          <div class="setting-opts">
-            <button v-for="o in s.options" :key="o" class="setting-opt" :class="{ active: toolSettings[s.key] === o }" @click="updateToolSetting(s.key, o)">{{ o }}</button>
+      <!-- Tool settings panel (overlay, not in flow) -->
+      <div class="tool-settings-overlay" v-if="showSettings && currentToolSettings" @click.self="showSettings = false">
+        <div class="tool-settings-panel">
+          <div class="settings-header">
+            <span class="settings-title">更多设置</span>
+            <span class="settings-close" @click="showSettings = false">×</span>
+          </div>
+          <div v-for="s in currentToolSettings" :key="s.key" class="setting-row">
+            <span class="setting-label">{{ s.label }}</span>
+            <div class="setting-opts">
+              <button v-for="o in s.options" :key="o" class="setting-opt" :class="{ active: toolSettings[s.key] === o }" @click="updateToolSetting(s.key, o)">{{ o }}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -98,8 +104,8 @@
       <div class="float-input">
         <div class="input-wrap" @click="focusInput">
           <template v-if="currentTool">
-            <span class="input-chip tool-chip-tag" v-html="TOOL_ICONS[currentTool]"></span>
-            <span class="input-chip" v-for="(val, key) in toolSettings" :key="key">{{ val }}</span>
+            <span class="input-chip tool-chip-tag" v-html="TOOL_ICONS[currentTool]" @click.stop="showSettings = !showSettings"></span>
+            <span class="input-chip" v-for="(val, key) in toolSettings" :key="key" @click.stop="showSettings = !showSettings">{{ val }}</span>
           </template>
           <input
             v-model="inputText"
@@ -829,18 +835,33 @@ onMounted(() => {
   }
 }
 
-.tool-settings {
-  padding: 8px 14px; border-top: 1px solid #f0f0f0;
-  background: #fafafa; flex-shrink: 0;
+.tool-settings-overlay {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(0,0,0,0.08);
+  border-radius: 12px;
 
+  .tool-settings-panel {
+    width: 100%; max-height: 50%;
+    background: #fff; border-top: 1px solid #e5e7eb;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
+    padding: 10px 14px 14px; overflow-y: auto;
+  }
+  .settings-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+    .settings-title { font-size: 12px; font-weight: 500; color: #333; }
+    .settings-close { cursor: pointer; color: #999; font-size: 16px; &:hover { color: #333; } }
+  }
   .setting-row {
-    display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
     &:last-child { margin-bottom: 0; }
   }
   .setting-label { font-size: 10px; color: #6b7280; white-space: nowrap; min-width: 45px; }
   .setting-opts { display: flex; flex-wrap: wrap; gap: 4px; }
   .setting-opt {
-    padding: 2px 8px; border-radius: 10px; font-size: 10px;
+    padding: 3px 10px; border-radius: 12px; font-size: 10px;
     border: 1px solid #d1d5db; background: #fff; color: #4b5563;
     cursor: pointer; transition: all 0.15s;
     &:hover { border-color: #a78bfa; color: #7c3aed; }
@@ -915,7 +936,8 @@ onMounted(() => {
     display: inline-flex; align-items: center; gap: 2px;
     padding: 2px 8px; background: #ede9fe; color: #7c3aed;
     border-radius: 4px; font-size: 10px; font-weight: 500;
-    white-space: nowrap; flex-shrink: 0;
+    white-space: nowrap; flex-shrink: 0; cursor: pointer;
+    &:hover { background: #ddd6fe; }
   }
   .tool-chip-tag {
     padding: 2px 4px; background: #8b5cf6; color: #fff; border-radius: 4px;
