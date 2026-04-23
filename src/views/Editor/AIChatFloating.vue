@@ -31,6 +31,7 @@
             <div class="slide-content-badge" v-if="msg._isSlideContent">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               PPT 内容预览
+              <span class="slide-label" v-if="msg._slideLabel">{{ msg._slideLabel }}</span>
             </div>
             <span class="msg-tool-icon" v-if="msg.tool && !msg._isSlideContent" v-html="TOOL_ICONS[msg.tool]"></span>
             <div class="msg-text" v-if="msg.content">
@@ -570,16 +571,24 @@ async function send() {
         aiMsg.content = chatContent
         aiMsg.buttons = []
 
-        // Second message: PPT content card (with insert buttons based on content type)
-        if (pptPart?.trim()) {
-          const { content: pptContent, contentType } = parseContentType(pptPart)
+        // Parse content type from the PPT part (marker is at the very end)
+        const { content: cleanPptPart, contentType } = parseContentType(pptPart || '')
+
+        // Split by ---PPT_SLIDE--- for multi-slide support
+        const slides = cleanPptPart.split('---PPT_SLIDE---').map(s => s.trim()).filter(Boolean)
+
+        for (let i = 0; i < slides.length; i++) {
+          const slideContent = slides[i]
+          if (!slideContent) continue
+          const slideLabel = slides.length > 1 ? `${i + 1}/${slides.length}` : ''
           session.messages.push({
-            id: Date.now().toString() + Math.random().toString(36).slice(2),
+            id: Date.now().toString() + Math.random().toString(36).slice(2) + i,
             type: 'ai',
-            content: pptContent,
+            content: slideContent,
             timestamp: new Date(),
             _btnsVisible: true,
             _isSlideContent: contentType === 'slide',
+            _slideLabel: slideLabel,
             buttons: getButtonsForType(contentType),
           })
         }
@@ -834,6 +843,12 @@ onMounted(() => {
     font-size: 12px; color: #8b5cf6; font-weight: 500;
     margin-bottom: 6px; padding-bottom: 6px;
     border-bottom: 1px solid #ede9fe;
+
+    .slide-label {
+      margin-left: auto;
+      font-size: 11px; color: #a78bfa; font-weight: 400;
+      background: #f5f3ff; padding: 1px 6px; border-radius: 8px;
+    }
   }
   .msg-tool-icon {
     display: inline-flex; vertical-align: middle; margin-right: 4px; opacity: 0.7;

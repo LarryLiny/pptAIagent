@@ -11,6 +11,7 @@ export interface ChatMessage {
   images?: { src: string; preview?: string; width: number; height: number }[]
   _btnsVisible: boolean
   _isSlideContent?: boolean
+  _slideLabel?: string
 }
 
 export interface ChatSession {
