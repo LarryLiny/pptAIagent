@@ -4,6 +4,8 @@
  */
 import { useSlidesStore, useMainStore } from '@/store'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import emitter, { EmitterEvents } from '@/utils/emitter'
+import type { RichTextAction } from '@/utils/emitter'
 import type { PPTTextElement, PPTShapeElement } from '@/types/slides'
 
 // Color name → hex mapping
@@ -107,6 +109,24 @@ export interface LocalCommandResult {
 }
 
 /**
+ * Check if a ProseMirror editor is currently focused (user is editing text inline).
+ * When focused, we can use emitter commands that respect text selection.
+ */
+function isProsemirrorActive(): boolean {
+  const active = document.activeElement
+  if (!active) return false
+  return !!active.closest('.prosemirror-editor')
+}
+
+/**
+ * Send a rich text command via emitter to the active ProseMirror editor.
+ * This respects the current text selection — only selected text is affected.
+ */
+function emitRichTextCommand(action: RichTextAction | RichTextAction[]) {
+  emitter.emit(EmitterEvents.RICH_TEXT_COMMAND, { action })
+}
+
+/**
  * Try to parse and execute a local command.
  * Returns { handled: true, message } if handled locally.
  * Returns { handled: false } if should be sent to LLM.
@@ -117,14 +137,17 @@ export function tryLocalCommand(input: string): LocalCommandResult {
   const text = input.trim()
   const el = getSelectedElement()
   const textEl = getSelectedTextElement()
+  const pmActive = isProsemirrorActive()
 
   const results: string[] = []
-  // Track current content for chained text modifications
+  // Rich text commands to emit (when ProseMirror is active)
+  const richTextActions: RichTextAction[] = []
+  // Track current content for chained text modifications (fallback mode)
   let currentContent = textEl?.content || ''
   let contentChanged = false
   let propsChanged: Record<string, any> = {}
 
-  // Helper: mark content as changed
+  // Helper: mark content as changed (fallback HTML mode)
   const updateContent = (newContent: string) => {
     currentContent = newContent
     contentChanged = true
@@ -135,18 +158,33 @@ export function tryLocalCommand(input: string): LocalCommandResult {
   if (fontSizeMatch && textEl) {
     const size = parseInt(fontSizeMatch[1])
     if (size >= 8 && size <= 200) {
-      updateContent(changeHtmlFontSize(currentContent, size))
+      if (pmActive) {
+        richTextActions.push({ command: 'fontsize', value: size + 'px' })
+      }
+      else {
+        updateContent(changeHtmlFontSize(currentContent, size))
+      }
       results.push(`字号→${size}px`)
     }
   }
   else if (/[字子]号.*(大|增大|放大|调大)/.test(text) && textEl) {
-    const cur = parseInt(currentContent.match(/font-size:\s*(\d+)/)?.[1] || '16')
-    updateContent(changeHtmlFontSize(currentContent, Math.min(200, cur + 4)))
+    if (pmActive) {
+      richTextActions.push({ command: 'fontsize-add', value: '4' })
+    }
+    else {
+      const cur = parseInt(currentContent.match(/font-size:\s*(\d+)/)?.[1] || '16')
+      updateContent(changeHtmlFontSize(currentContent, Math.min(200, cur + 4)))
+    }
     results.push(`字号增大`)
   }
   else if (/[字子]号.*(小|减小|缩小|调小)/.test(text) && textEl) {
-    const cur = parseInt(currentContent.match(/font-size:\s*(\d+)/)?.[1] || '16')
-    updateContent(changeHtmlFontSize(currentContent, Math.max(8, cur - 4)))
+    if (pmActive) {
+      richTextActions.push({ command: 'fontsize-reduce', value: '4' })
+    }
+    else {
+      const cur = parseInt(currentContent.match(/font-size:\s*(\d+)/)?.[1] || '16')
+      updateContent(changeHtmlFontSize(currentContent, Math.max(8, cur - 4)))
+    }
     results.push(`字号减小`)
   }
 
@@ -159,7 +197,12 @@ export function tryLocalCommand(input: string): LocalCommandResult {
     if (m && textEl && !results.some(r => r.includes('颜色'))) {
       const color = resolveColor(m[1])
       if (color) {
-        updateContent(changeHtmlColor(currentContent, color))
+        if (pmActive) {
+          richTextActions.push({ command: 'color', value: color })
+        }
+        else {
+          updateContent(changeHtmlColor(currentContent, color))
+        }
         results.push(`颜色→${color}`)
         break
       }
@@ -168,35 +211,70 @@ export function tryLocalCommand(input: string): LocalCommandResult {
 
   // --- Bold ---
   if (/取消加粗|去掉加粗|不加粗/.test(text) && textEl) {
-    updateContent(changeHtmlBold(currentContent, false))
+    if (pmActive) {
+      richTextActions.push({ command: 'bold' })
+    }
+    else {
+      updateContent(changeHtmlBold(currentContent, false))
+    }
     results.push('取消加粗')
   }
   else if (/加粗|加醋|变粗|bold/.test(text) && textEl) {
-    updateContent(changeHtmlBold(currentContent, true))
+    if (pmActive) {
+      richTextActions.push({ command: 'bold' })
+    }
+    else {
+      updateContent(changeHtmlBold(currentContent, true))
+    }
     results.push('加粗')
   }
 
   // --- Italic ---
   if (/取消斜体|去掉斜体/.test(text) && textEl) {
-    updateContent(changeHtmlItalic(currentContent, false))
+    if (pmActive) {
+      richTextActions.push({ command: 'em' })
+    }
+    else {
+      updateContent(changeHtmlItalic(currentContent, false))
+    }
     results.push('取消斜体')
   }
   else if ((/斜体|倾斜|italic/.test(text)) && textEl) {
-    updateContent(changeHtmlItalic(currentContent, true))
+    if (pmActive) {
+      richTextActions.push({ command: 'em' })
+    }
+    else {
+      updateContent(changeHtmlItalic(currentContent, true))
+    }
     results.push('斜体')
   }
 
   // --- Alignment ---
   if (/居中对齐|文字居中|剧中|center/.test(text) && textEl) {
-    updateContent(changeHtmlAlign(currentContent, 'center'))
+    if (pmActive) {
+      richTextActions.push({ command: 'align', value: 'center' })
+    }
+    else {
+      updateContent(changeHtmlAlign(currentContent, 'center'))
+    }
     results.push('居中')
   }
   else if (/左对齐|靠左/.test(text) && textEl) {
-    updateContent(changeHtmlAlign(currentContent, 'left'))
+    if (pmActive) {
+      richTextActions.push({ command: 'align', value: 'left' })
+    }
+    else {
+      updateContent(changeHtmlAlign(currentContent, 'left'))
+    }
     results.push('左对齐')
   }
   else if (/右对齐|靠右/.test(text) && textEl) {
-    updateContent(changeHtmlAlign(currentContent, 'right'))
+    if (pmActive) {
+      richTextActions.push({ command: 'align', value: 'right' })
+    }
+    else {
+      updateContent(changeHtmlAlign(currentContent, 'right'))
+    }
     results.push('右对齐')
   }
 
@@ -280,8 +358,14 @@ export function tryLocalCommand(input: string): LocalCommandResult {
     return { handled: false, message: '' }
   }
 
-  // Apply content changes
-  if (contentChanged && textEl) {
+  // If ProseMirror is active and we have rich text actions, emit them
+  // This respects the user's text selection — only selected text is affected
+  if (pmActive && richTextActions.length > 0) {
+    emitRichTextCommand(richTextActions)
+  }
+
+  // Apply content changes (fallback HTML mode, only when PM is not active)
+  if (!pmActive && contentChanged && textEl) {
     propsChanged.content = currentContent
   }
 
@@ -290,6 +374,6 @@ export function tryLocalCommand(input: string): LocalCommandResult {
     slidesStore.updateElement({ id: el.id, props: propsChanged as any })
   }
 
-  addHistorySnapshot()
+  if (!pmActive) addHistorySnapshot()
   return { handled: true, message: `已完成：${results.join('、')}` }
 }
