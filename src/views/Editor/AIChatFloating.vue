@@ -292,7 +292,7 @@ function startDrag(e: MouseEvent) {
   const startX = e.clientX - pos.value.x
   const startY = e.clientY - pos.value.y
   const onMove = (ev: MouseEvent) => {
-    pos.value.x = Math.max(0, Math.min(window.innerWidth - 400, ev.clientX - startX))
+    pos.value.x = Math.max(0, Math.min(window.innerWidth - 440, ev.clientX - startX))
     pos.value.y = Math.max(0, Math.min(window.innerHeight - 200, ev.clientY - startY))
   }
   const onUp = () => {
@@ -723,7 +723,7 @@ watch(floatingOpen, (open) => {
 })
 
 onMounted(() => {
-  pos.value.x = Math.max(100, window.innerWidth - 520)
+  pos.value.x = Math.max(100, window.innerWidth - 560)
   initSpeechRecognition()
   // Pre-analyze templates on mount
   analyzeTemplates()
@@ -738,7 +738,7 @@ onMounted(() => {
 .floating-chat {
   pointer-events: all;
   position: absolute;
-  width: 400px; max-height: 700px;
+  width: 440px; max-height: 720px;
   background: #fff; border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
   display: flex; flex-direction: column;
@@ -754,7 +754,7 @@ onMounted(() => {
 
   .float-title {
     display: flex; align-items: center; gap: 6px;
-    font-size: 13px; font-weight: 500; color: #333;
+    font-size: 14px; font-weight: 500; color: #333;
   }
   .float-close {
     cursor: pointer; color: #999; display: flex; padding: 2px;
@@ -763,11 +763,11 @@ onMounted(() => {
 }
 
 .float-messages {
-  flex: 1; overflow-y: auto; padding: 12px; min-height: 180px; max-height: 480px;
+  flex: 1; overflow-y: auto; padding: 14px; min-height: 200px; max-height: 500px;
 
   .welcome-msg {
     text-align: center; padding: 30px 0;
-    .welcome-text { color: #9ca3af; font-size: 13px; }
+    .welcome-text { color: #9ca3af; font-size: 14px; }
   }
 
   .msg-row { margin-bottom: 10px; }
@@ -775,17 +775,17 @@ onMounted(() => {
   .msg-ai { display: flex; flex-direction: column; align-items: flex-start; }
 
   .msg-bubble {
-    border-radius: 10px; padding: 8px 12px; max-width: 90%; word-break: break-word;
-    &.user { background: #3b82f6; color: #fff; font-size: 12.5px; }
-    &.ai { background: #f3f4f6; color: #111; font-size: 12.5px; }
+    border-radius: 10px; padding: 10px 14px; max-width: 90%; word-break: break-word;
+    &.user { background: #3b82f6; color: #fff; font-size: 14px; }
+    &.ai { background: #f3f4f6; color: #111; font-size: 14px; }
     &.slide-content {
       background: #fff; border: 1.5px solid #8b5cf6; border-radius: 8px;
-      padding: 10px 12px;
+      padding: 12px 14px;
     }
   }
   .slide-content-badge {
     display: flex; align-items: center; gap: 4px;
-    font-size: 10px; color: #8b5cf6; font-weight: 500;
+    font-size: 12px; color: #8b5cf6; font-weight: 500;
     margin-bottom: 6px; padding-bottom: 6px;
     border-bottom: 1px solid #ede9fe;
   }
@@ -817,7 +817,7 @@ onMounted(() => {
     }
     &:hover .img-overlay { opacity: 1; }
   }
-  .msg-text { line-height: 1.5; }
+  .msg-text { line-height: 1.6; }
   .msg-thinking {
     display: flex; gap: 4px; padding: 4px 0;
     .dot {
@@ -836,8 +836,8 @@ onMounted(() => {
     display: flex; gap: 6px; margin-top: 6px;
   }
   .action-btn {
-    padding: 3px 10px; background: #fff; border: 1px solid #d1d5db;
-    border-radius: 6px; font-size: 11px; color: #374151; cursor: pointer;
+    padding: 4px 12px; background: #fff; border: 1px solid #d1d5db;
+    border-radius: 6px; font-size: 12px; color: #374151; cursor: pointer;
     &:hover { background: #f9fafb; border-color: #9ca3af; }
   }
 }
@@ -858,17 +858,17 @@ onMounted(() => {
   .settings-header {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 8px;
-    .settings-title { font-size: 12px; font-weight: 500; color: #333; }
+    .settings-title { font-size: 13px; font-weight: 500; color: #333; }
     .settings-close { cursor: pointer; color: #999; font-size: 16px; &:hover { color: #333; } }
   }
   .setting-row {
     display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
     &:last-child { margin-bottom: 0; }
   }
-  .setting-label { font-size: 10px; color: #6b7280; white-space: nowrap; min-width: 45px; }
-  .setting-opts { display: flex; flex-wrap: wrap; gap: 4px; }
+  .setting-label { font-size: 12px; color: #6b7280; white-space: nowrap; min-width: 50px; }
+  .setting-opts { display: flex; flex-wrap: wrap; gap: 5px; }
   .setting-opt {
-    padding: 3px 10px; border-radius: 12px; font-size: 10px;
+    padding: 4px 12px; border-radius: 12px; font-size: 12px;
     border: 1px solid #d1d5db; background: #fff; color: #4b5563;
     cursor: pointer; transition: all 0.15s;
     &:hover { border-color: #a78bfa; color: #7c3aed; }
@@ -882,28 +882,28 @@ onMounted(() => {
   flex-shrink: 0;
 
   .tool-chip {
-    display: flex; align-items: center; gap: 3px;
-    padding: 3px 8px; border: 1px solid #d1d5db; border-radius: 4px;
-    font-size: 11px; color: #6b7280; background: #fff; cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border: 1px solid #d1d5db; border-radius: 4px;
+    font-size: 12px; color: #6b7280; background: #fff; cursor: pointer;
     &:hover { background: #f3f4f6; }
   }
   .tool-tag {
-    display: flex; align-items: center; gap: 3px;
-    padding: 2px 8px; background: #f5f3ff; border: 1px solid #ddd6fe;
-    border-radius: 10px; font-size: 10px; color: #7c3aed;
+    display: flex; align-items: center; gap: 4px;
+    padding: 3px 10px; background: #f5f3ff; border: 1px solid #ddd6fe;
+    border-radius: 10px; font-size: 12px; color: #7c3aed;
     .tag-x { cursor: pointer; &:hover { color: #5b21b6; } }
   }
   .settings-btn {
-    display: flex; align-items: center; gap: 3px;
-    padding: 3px 8px; border-radius: 4px; font-size: 10px;
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 4px; font-size: 12px;
     border: 1px solid #d1d5db; background: #fff; color: #6b7280;
     cursor: pointer; white-space: nowrap;
     &:hover { background: #f3f4f6; border-color: #9ca3af; color: #374151; }
     &.active { background: #ede9fe; border-color: #c4b5fd; color: #7c3aed; }
   }
   .bound-hint {
-    display: flex; align-items: center; gap: 3px;
-    font-size: 10px; color: #8b5cf6; margin-left: auto;
+    display: flex; align-items: center; gap: 4px;
+    font-size: 12px; color: #8b5cf6; margin-left: auto;
   }
 }
 
@@ -921,7 +921,7 @@ onMounted(() => {
   }
 }
 .tool-item {
-  padding: 6px 10px; font-size: 12px; color: #374151; cursor: pointer;
+  padding: 7px 12px; font-size: 13px; color: #374151; cursor: pointer;
   display: flex; align-items: center; gap: 6px;
   &:hover { background: #f3f4f6; }
   .tool-item-icon { display: flex; align-items: center; color: #9ca3af; }
@@ -940,9 +940,9 @@ onMounted(() => {
     &:focus-within { border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139,92,246,0.15); }
   }
   .input-chip {
-    display: inline-flex; align-items: center; gap: 2px;
-    padding: 2px 8px; background: #ede9fe; color: #7c3aed;
-    border-radius: 4px; font-size: 10px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 3px 8px; background: #ede9fe; color: #7c3aed;
+    border-radius: 4px; font-size: 12px; font-weight: 500;
     white-space: nowrap; flex-shrink: 0; cursor: pointer;
     &:hover { background: #ddd6fe; }
   }
@@ -950,8 +950,8 @@ onMounted(() => {
     padding: 2px 4px; background: #8b5cf6; color: #fff; border-radius: 4px;
   }
   .input-field {
-    flex: 1; min-width: 60px; height: 24px; padding: 0 2px;
-    border: none; outline: none; font-size: 12px;
+    flex: 1; min-width: 60px; height: 28px; padding: 0 4px;
+    border: none; outline: none; font-size: 14px;
     background: transparent;
   }
   .send-btn {
