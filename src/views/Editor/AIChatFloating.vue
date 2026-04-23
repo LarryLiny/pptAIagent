@@ -731,7 +731,7 @@ onMounted(() => {
 .floating-chat {
   pointer-events: all;
   position: absolute;
-  width: 400px; max-height: 680px;
+  width: 400px; max-height: 700px;
   background: #fff; border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
   display: flex; flex-direction: column;
