@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "自动同步需求文档",
+  "description": "每轮对话结束后，检查是否有逻辑或 UI 相关的代码变更，如果有则使用 demotomd skill 自动同步需求文档。",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "检查本轮对话是否修改了 src/ 目录下的代码文件（用 git diff --name-only HEAD~1 或 git status）。如果有 .ts/.vue/.tsx 文件变更，使用 demotomd skill 执行增量同步需求文档。如果只有 .md/.json/.hook 等非代码文件变更，则跳过不执行。"
+  }
+}
