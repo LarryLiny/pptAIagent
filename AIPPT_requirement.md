@@ -687,33 +687,42 @@ LLM 的每条回复末尾必须附加内容类型标记 `---CONTENT_TYPE:xxx---`
 
 ### 11.2 架构总览（四层架构）
 
-```mermaid
-graph TB
-    subgraph 第一层：对话管理 + 意图理解
-        A[对话管理<br/>多 session 模型] --> B[意图识别<br/>通用 NLU]
-        B --> C[路由分发<br/>根据 AgentContext 加载技能集]
-        E[教育知识库<br/>POA / PBL / 场景教学法] -.-> C
-    end
-
-    subgraph 第二层：内容生成与处理 — LLM 技能管理
-        C --> F[备课技能集]
-        C --> G[教材编写技能集]
-        C --> H[共享技能<br/>习题生成 / 内容润色 / 总结要点]
-        F -.-> F1[生成类：课堂引入 / 教学活动]
-        G -.-> G1[生成类：文章生成 / 素材推荐]
-        G -.-> G2[审核类：出版规范 / 涉政涉密<br/>教材编写场景自动串联]
-        H -.-> H1[处理类：润色 / 难度调整 / 翻译]
-    end
-
-    subgraph 第三层：写入适配 — Writer
-        F --> I[PPTist Writer<br/>addSlide / insertTextElement<br/>applyTheme ...]
-        G --> J[Lexical Writer<br/>insertParagraph / insertTable<br/>replaceSelection ...]
-    end
-
-    subgraph 第四层：前端宿主
-        I --> K[U 校园备课端<br/>PPTist 编辑器]
-        J --> L[iPublish<br/>图书编辑平台]
-    end
+```
+┌─────────────────────────────────────────────────────────────┐
+│              第一层：对话管理 + 意图理解                        │
+│                                                             │
+│  [对话管理]──→[意图识别]──→[路由分发]                          │
+│   多session模型    通用NLU    根据AgentContext加载技能集        │
+│                                                             │
+│  [教育知识库] ···→ [路由分发]                                  │
+│   POA/PBL/场景教学法                                         │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────────┐
+│         第二层：内容生成与处理 — LLM 技能管理                    │
+│                                                             │
+│  [备课技能集]        [教材编写技能集]      [共享技能]            │
+│   ├ 生成类:           ├ 生成类:             ├ 习题生成          │
+│   │ 课堂引入          │ 文章生成            ├ 内容润色          │
+│   │ 教学活动          │ 素材推荐            ├ 总结要点          │
+│   └ 幻灯片布局        ├ 审核类(自动串联):    ├ 难度调整          │
+│                      │ 出版规范/涉政涉密    └ 演讲稿生成        │
+│                      └ 处理类: 润色/翻译                      │
+└────────┬─────────────────────┬──────────────────────────────┘
+         │                     │
+┌────────▼─────────┐  ┌───────▼──────────┐
+│ 第三层：Writer    │  │ 第三层：Writer     │
+│ PPTist Writer    │  │ Lexical Writer    │
+│ addSlide         │  │ insertParagraph   │
+│ insertTextElement│  │ insertTable       │
+│ applyTheme ...   │  │ replaceSelection  │
+└────────┬─────────┘  └───────┬──────────┘
+         │                     │
+┌────────▼─────────┐  ┌───────▼──────────┐
+│ 第四层：前端宿主   │  │ 第四层：前端宿主   │
+│ U校园备课端       │  │ iPublish          │
+│ PPTist编辑器     │  │ 图书编辑平台       │
+└──────────────────┘  └──────────────────┘
 ```
 
 ### 11.3 分层设计
@@ -759,31 +768,17 @@ AgentContext:
 - 教材编写场景可配置为"生成 → 自动审核 → 输出"的技能编排链；备课场景审核为可选项
 - 审核严格程度由场景决定，不是架构层面的硬约束
 
-```mermaid
-graph LR
-    subgraph 备课技能集
-        A1[知识引入生成]
-        A2[教学活动设计]
-        A3[幻灯片布局建议]
-        A4[图片搜索]
-    end
-
-    subgraph 共享技能
-        S1[习题生成]
-        S2[内容润色]
-        S3[总结要点]
-        S4[演讲稿生成]
-        S5[难度调整]
-    end
-
-    subgraph 教材编写技能集
-        B1[文章生成]
-        B2[素材推荐]
-        B3[体例检查]
-        B4[审校建议]
-        B5[出版规范审核]
-        B6[涉政涉密检测]
-    end
+```
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│   备课技能集       │  │    共享技能       │  │  教材编写技能集    │
+│                  │  │                  │  │                  │
+│ · 知识引入生成    │  │ · 习题生成        │  │ · 文章生成        │
+│ · 教学活动设计    │  │ · 内容润色        │  │ · 素材推荐        │
+│ · 幻灯片布局建议  │  │ · 总结要点        │  │ · 体例检查        │
+│ · 图片搜索       │  │ · 演讲稿生成      │  │ · 审校建议        │
+│                  │  │ · 难度调整        │  │ · 出版规范审核     │
+│                  │  │                  │  │ · 涉政涉密检测     │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
 
 共享技能是合并的核心收益——一次开发，两边复用。新增一个共享技能两个产品同时受益。
@@ -801,70 +796,53 @@ graph LR
 
 #### 案例 1：备课场景
 
-```mermaid
-sequenceDiagram
-    participant T as 教师
-    participant UI as U校园备课端
-    participant R as 路由分发层
-    participant S as 备课技能层
-    participant W as PPTist Writer
+```
+教师 → U校园备课端 → 路由分发层 → 备课技能层 → PPTist Writer → U校园备课端 → 教师
 
-    T->>UI: "帮我生成一个关于 Past Tense 的课堂导入活动"
-    UI->>R: AgentContext{platform:'ucampus', role:'teacher'}
-    R->>S: 加载备课技能集 → 调用 design_activity
-    S-->>S: LLM 生成活动内容（融入 POA 驱动 + 场景教学法）
-    S->>W: 生成完毕，调用 PPTist Writer
-    W->>UI: addSlide() + insertTextElement()
-    UI->>T: 新幻灯片已插入，显示"插入当前页"/"新建页插入"按钮
+详细流程：
+1. 教师: "帮我生成一个关于 Past Tense 的课堂导入活动"
+2. UI → 路由: AgentContext{platform:'ucampus', role:'teacher'}
+3. 路由 → 技能层: 加载备课技能集 → 调用 design_activity
+4. 技能层: LLM 生成活动内容（融入 POA 驱动 + 场景教学法）
+5. 技能层 → Writer: 生成完毕，调用 PPTist Writer
+6. Writer → UI: addSlide() + insertTextElement()
+7. UI → 教师: 新幻灯片已插入，显示"插入当前页"/"新建页插入"按钮
 ```
 
 > 备课场景下审核为可选项，不自动串联。教师可主动说"帮我检查一下这段内容"来触发。
 
 #### 案例 2：教材编写场景（生成 → 自动审核 → 写入）
 
-```mermaid
-sequenceDiagram
-    participant E as 编辑
-    participant UI as iPublish
-    participant R as 路由分发层
-    participant S as 教材编写技能层
-    participant W as Lexical Writer
+```
+编辑 → iPublish → 路由分发层 → 教材编写技能层 → Lexical Writer → iPublish → 编辑
 
-    E->>UI: "帮我写一段关于 Past Tense 的语法讲解"
-    UI->>R: AgentContext{platform:'ipublish', role:'editor'}
-    R->>S: 加载教材编写技能集 → 调用 generate_article
-    S-->>S: LLM 生成语法讲解内容
-    S-->>S: 技能编排链自动触发：出版规范审核 + 涉政涉密检测
-    alt 审核通过
-        S->>W: 调用 Lexical Writer
-        W->>UI: insertParagraph() + applyStyle()
-        UI->>E: 内容已插入编辑器光标位置
-    else 审核不通过
-        S-->>S: 带修正指令重新生成 / 标注问题
-        S->>UI: 返回审核意见，提示编辑确认或修改
-    end
+详细流程：
+1. 编辑: "帮我写一段关于 Past Tense 的语法讲解"
+2. UI → 路由: AgentContext{platform:'ipublish', role:'editor'}
+3. 路由 → 技能层: 加载教材编写技能集 → 调用 generate_article
+4. 技能层: LLM 生成语法讲解内容
+5. 技能层: 技能编排链自动触发 → 出版规范审核 + 涉政涉密检测
+6a. [审核通过] 技能层 → Writer: 调用 Lexical Writer
+    Writer → UI: insertParagraph() + applyStyle()
+    UI → 编辑: 内容已插入编辑器光标位置
+6b. [审核不通过] 技能层: 带修正指令重新生成 / 标注问题
+    技能层 → UI: 返回审核意见，提示编辑确认或修改
 ```
 
 > 教材编写场景下，审核类技能（出版规范、涉政涉密）作为技能编排链的一环自动串联在生成之后。
 
 #### 案例 3：共享技能复用
 
-```mermaid
-sequenceDiagram
-    participant U as 用户（教师或编辑）
-    participant R as 路由分发层
-    participant S as 共享技能
-    participant W as Writer（PPTist 或 Lexical）
+```
+用户（教师或编辑） → 路由分发层 → 共享技能 → Writer（PPTist 或 Lexical）
 
-    U->>R: "生成 3 道关于 Past Tense 的选择题"
-    R->>S: 调用共享技能: generate_exercise
-    S-->>S: LLM 生成习题（场景教学法 + POA 促成）
-    Note over R,W: 路由层根据 platform 选择 Writer
-    alt platform = ucampus
-        S->>W: PPTist Writer → 每道题一张幻灯片
-    else platform = ipublish
-        S->>W: Lexical Writer → 习题插入文档章节
-    end
+详细流程：
+1. 用户: "生成 3 道关于 Past Tense 的选择题"
+2. 路由: 调用共享技能 generate_exercise
+3. 共享技能: LLM 生成习题（场景教学法 + POA 促成）
+4. 路由根据 platform 选择 Writer:
+   - platform = ucampus → PPTist Writer → 每道题一张幻灯片
+   - platform = ipublish → Lexical Writer → 习题插入文档章节
 ```
 
 ### 11.5 落地策略
@@ -919,5 +897,5 @@ sequenceDiagram
 | 2026-04-26 | incremental | 1.5.0 | 补充布局优化详细规则、教育理论对应关系 |
 | 2026-04-26 | full-rewrite | 2.0.0 | 重写文档：聚焦 Prompt 体系、调用链路、工具定义、拼接逻辑 |
 | 2026-04-27 | incremental | 2.1.0 | 补回丢失的交互逻辑章节：入口与交互(第2章)、语音输入、工具选择、消息气泡、会话管理详细生命周期和元素绑定(第10章) |
-| 2026-04-27 | incremental | 2.2.0 | 新增第11章：跨项目架构设计（统一智能体内核），含 Mermaid 架构图、四层分层说明、Skills 复用矩阵、调用流程案例（备课/教材编写/共享Skill 三个场景）、落地策略、Session 模型统一方案 |
-| 2026-04-27 | incremental | 2.3.0 | 修正第11章架构设计：内容审核不再单独为一层，改为技能层内的审核类技能；架构从五层简化为四层；更新 Mermaid 架构图和三个调用流程案例；教材编写场景审核作为技能编排链自动串联，备课场景审核为可选项 |
+| 2026-04-27 | incremental | 2.2.0 | 新增第11章：跨项目架构设计（统一智能体内核），含架构图、四层分层说明、Skills 复用矩阵、调用流程案例（备课/教材编写/共享Skill 三个场景）、落地策略、Session 模型统一方案 |
+| 2026-04-27 | incremental | 2.3.0 | 修正第11章架构设计：内容审核不再单独为一层，改为技能层内的审核类技能；架构从五层简化为四层；更新架构图和三个调用流程案例；教材编写场景审核作为技能编排链自动串联，备课场景审核为可选项 |
