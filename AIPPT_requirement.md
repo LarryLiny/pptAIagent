@@ -2,10 +2,10 @@
 
 <!--
 @meta
-version: 2.1.0
-last-updated: 2026-04-27 10:00:00
+version: 2.2.0
+last-updated: 2026-04-27 16:00:00
 last-full-rewrite: 2026-04-26
-update-mode: full-rewrite
+update-mode: incremental
 source-hash: ai-assistant-files-v4
 analyzed-files: src/views/Editor/AIChatFloating.vue, src/views/Editor/AISidebarPanel.vue, src/views/Editor/aiChatStore.ts, src/views/Editor/aiPptTools.ts, src/views/Editor/aiLocalCommands.ts, src/views/Editor/aiSlideTemplate.ts, src/views/Editor/TypeWriter.vue
 @/meta
@@ -675,9 +675,191 @@ LLM 的每条回复末尾必须附加内容类型标记 `---CONTENT_TYPE:xxx---`
 
 ---
 
-## 第 11 章：已知缺口
+## 第 11 章：跨项目架构设计 — 统一智能体内核 [Added 2026-04-27]
 
-### 11.1 本期不支持的功能
+### 11.1 背景
+
+当前存在两个独立的 AI 智能体项目：
+- **备课助手（子言）**：嵌入 U 校园备课端（PPTist），帮助大学英语教师制作课件
+- **教材编写助手**：嵌入 iPublish 图书编辑平台，指导编辑进行教材编写
+
+两者核心流程同构：**理解意图 → 生成内容 → 写入宿主系统**，差异在于"生成什么内容"和"写入哪个系统"。经评估，两个智能体应共享底层能力，前端各自适配宿主平台。
+
+### 11.2 架构总览
+
+```mermaid
+graph TB
+    subgraph 统一智能体内核
+        A[对话管理层<br/>多 session 模型] --> B[意图识别层<br/>通用 NLU]
+        B --> C[路由分发层<br/>根据 AgentContext 加载 Skills]
+        D[内容审核层<br/>质量 / 合规] -.-> C
+        E[教育知识库<br/>POA / PBL / 场景教学法] -.-> C
+    end
+
+    subgraph Skills 层
+        C --> F[备课助手 Skills]
+        C --> G[教材编写 Skills]
+        C --> H[共享 Skills<br/>习题生成 / 内容润色]
+    end
+
+    subgraph Writer 层 - Function Calling
+        F --> I[PPTist Writer<br/>addSlide / insertTextElement<br/>applyTheme ...]
+        G --> J[Lexical Writer<br/>insertParagraph / insertTable<br/>replaceSelection ...]
+    end
+
+    subgraph 前端宿主
+        I --> K[U 校园备课端<br/>PPTist 编辑器]
+        J --> L[iPublish<br/>图书编辑平台]
+    end
+```
+
+### 11.3 分层设计
+
+#### 11.3.1 统一层（共享，不分场景）
+
+| 模块 | 职责 | 说明 |
+|------|------|------|
+| 对话管理 | session 创建/切换/历史 | 统一多 session 模型。教材编写场景默认单 session（一本书一个长会话），备课场景多 session（每个任务独立会话） |
+| 意图识别 | 理解用户意图类型 | 生成内容 / 修改内容 / 查询 / 闲聊 |
+| 内容审核 | 生成内容质量把控 | 敏感词过滤、教育合规性检查、内容准确性校验 |
+| 教育知识库 | 教学法与学科知识 | POA / PBL / 场景教学法、课标、学科知识，两边共用 |
+
+#### 11.3.2 路由分发层
+
+前端初始化智能体连接时传入 `AgentContext`，路由层据此加载对应的 Skills 和 Writer Functions：
+
+```
+AgentContext:
+  platform: 'ucampus' | 'ipublish'   ← 宿主平台，前端初始化时传入
+  role: 'teacher' | 'editor'          ← 用户角色
+  taskType: 'courseware' | 'textbook'  ← 任务类型
+```
+
+路由规则：一个用户在一个平台上，场景是确定的，不需要运行时动态切换。
+
+#### 11.3.3 Skills 层（按场景加载，部分共享）
+
+```mermaid
+graph LR
+    subgraph 备课助手 Skills
+        A1[知识引入生成]
+        A2[教学活动设计]
+        A3[幻灯片布局建议]
+        A4[图片搜索]
+    end
+
+    subgraph 共享 Skills
+        S1[习题生成]
+        S2[内容润色]
+        S3[总结要点]
+        S4[演讲稿生成]
+    end
+
+    subgraph 教材编写 Skills
+        B1[文章生成]
+        B2[素材推荐]
+        B3[体例检查]
+        B4[审校建议]
+    end
+```
+
+共享 Skills 是合并的核心收益——一次开发，两边复用。新增一个共享 Skill 两个产品同时受益。
+
+#### 11.3.4 Writer 层（Function Calling，完全隔离）
+
+两套 Writer 以 Function Calling 形式注册给 LLM，路由层根据场景只注册对应的那套。LLM 不需要知道底层是 Lexical 还是 PPTist。
+
+| Writer | 宿主系统 | 典型 Functions |
+|--------|---------|---------------|
+| PPTist Writer | U 校园备课端 | addSlide, insertTextElement, insertImageElement, applyTheme, updateElement, updateSlideBackground |
+| Lexical Writer | iPublish | insertParagraph, insertTable, insertImage, replaceSelection, applyStyle |
+
+### 11.4 调用流程案例
+
+#### 案例 1：备课场景
+
+```mermaid
+sequenceDiagram
+    participant T as 教师
+    participant UI as U校园备课端
+    participant R as 路由分发层
+    participant S as 备课 Skills
+    participant A as 内容审核层
+    participant W as PPTist Writer
+
+    T->>UI: "帮我生成一个关于 Past Tense 的课堂导入活动"
+    UI->>R: AgentContext{platform:'ucampus', role:'teacher'}
+    R->>S: 加载备课 Skills → 调用 design_activity
+    S-->>S: LLM 生成活动内容（融入 POA 驱动 + 场景教学法）
+    S->>A: 内容审核 ✓
+    A->>W: 调用 PPTist Writer
+    W->>UI: addSlide() + insertTextElement()
+    UI->>T: 新幻灯片已插入，显示"插入当前页"/"新建页插入"按钮
+```
+
+#### 案例 2：教材编写场景（同样的请求，不同的处理路径）
+
+```mermaid
+sequenceDiagram
+    participant E as 编辑
+    participant UI as iPublish
+    participant R as 路由分发层
+    participant S as 教材编写 Skills
+    participant A as 内容审核层
+    participant W as Lexical Writer
+
+    E->>UI: "帮我写一段关于 Past Tense 的语法讲解"
+    UI->>R: AgentContext{platform:'ipublish', role:'editor'}
+    R->>S: 加载教材编写 Skills → 调用 generate_article
+    S-->>S: LLM 生成语法讲解内容
+    S->>A: 内容审核 + 体例检查 ✓
+    A->>W: 调用 Lexical Writer
+    W->>UI: insertParagraph() + applyStyle()
+    UI->>E: 内容已插入编辑器光标位置
+```
+
+#### 案例 3：共享 Skill 复用
+
+```mermaid
+sequenceDiagram
+    participant U as 用户（教师或编辑）
+    participant R as 路由分发层
+    participant S as 共享 Skills
+    participant W as Writer（PPTist 或 Lexical）
+
+    U->>R: "生成 3 道关于 Past Tense 的选择题"
+    R->>S: 调用共享 Skill: generate_exercise
+    S-->>S: LLM 生成习题（场景教学法 + POA 促成）
+    Note over R,W: 路由层根据 platform 选择 Writer
+    alt platform = ucampus
+        S->>W: PPTist Writer → 每道题一张幻灯片
+    else platform = ipublish
+        S->>W: Lexical Writer → 习题插入文档章节
+    end
+```
+
+### 11.5 落地策略
+
+| 阶段 | 内容 | 优先级 |
+|------|------|--------|
+| 第一步 | 统一 LLM 服务层：共享 prompt 模板、教育知识库、内容审核 pipeline | 高 — 改动最小，收益最大 |
+| 第二步 | 定义统一的 Function Calling 注册协议，两套 Writer 以插件形式接入 | 中 — 需要定义接口规范 |
+| 第三步 | 抽取共享 Skills（习题生成、内容润色等），统一维护 | 中 — 逐步迁移 |
+| 第四步 | 统一对话管理层，多 session 模型覆盖两个场景 | 低 — 教材编写侧需配合改造 |
+
+### 11.6 Session 模型统一说明
+
+两个产品当前的 session 模式不同：
+- 备课助手：多 session（每个任务独立会话，可随时新建/切换）
+- 教材编写：单 session（一本书一个连续长会话）
+
+统一方案：以多 session 模型为基准。单 session 是多 session 的特例（只有一个 session 且不允许新建）。教材编写侧未来也可能需要多 session（同时编多本书、分章节独立推进）。
+
+---
+
+## 第 12 章：已知缺口
+
+### 12.1 本期不支持的功能
 
 | 功能 | 说明 |
 |------|------|
@@ -686,7 +868,7 @@ LLM 的每条回复末尾必须附加内容类型标记 `---CONTENT_TYPE:xxx---`
 | 知识库 | 无教学知识库接入，AI 完全依赖大模型自身能力 |
 | 素材库 | 无社里素材库（图片、音视频、教学资源）接入 |
 
-### 11.2 待优化项
+### 12.2 待优化项
 
 | 功能 | 当前状态 | 期望 |
 |------|---------|------|
@@ -708,3 +890,4 @@ LLM 的每条回复末尾必须附加内容类型标记 `---CONTENT_TYPE:xxx---`
 | 2026-04-26 | incremental | 1.5.0 | 补充布局优化详细规则、教育理论对应关系 |
 | 2026-04-26 | full-rewrite | 2.0.0 | 重写文档：聚焦 Prompt 体系、调用链路、工具定义、拼接逻辑 |
 | 2026-04-27 | incremental | 2.1.0 | 补回丢失的交互逻辑章节：入口与交互(第2章)、语音输入、工具选择、消息气泡、会话管理详细生命周期和元素绑定(第10章) |
+| 2026-04-27 | incremental | 2.2.0 | 新增第11章：跨项目架构设计（统一智能体内核），含 Mermaid 架构图、四层分层说明、Skills 复用矩阵、调用流程案例（备课/教材编写/共享Skill 三个场景）、落地策略、Session 模型统一方案 |
