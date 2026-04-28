@@ -1,0 +1,50 @@
+[
+  {
+    "id": "ch-001",
+    "textbookId": "tb-001",
+    "name": "Unit 1 Fresh Start",
+    "orderIndex": 1
+  },
+  {
+    "id": "ch-002",
+    "textbookId": "tb-001",
+    "name": "Unit 2 Loving Parents, Loving Children",
+    "orderIndex": 2
+  },
+  {
+    "id": "ch-003",
+    "textbookId": "tb-001",
+    "name": "Unit 3 Digital Campus",
+    "orderIndex": 3
+  },
+  {
+    "id": "ch-004",
+    "textbookId": "tb-003",
+    "name": "Chapter 1 Banking and Finance",
+    "orderIndex": 1
+  },
+  {
+    "id": "ch-005",
+    "textbookId": "tb-003",
+    "name": "Chapter 2 International Trade",
+    "orderIndex": 2
+  },
+  {
+    "id": "ch-006",
+    "textbookId": "tb-006",
+    "name": "Unit 1 Ways of Learning",
+    "orderIndex": 1
+  },
+  {
+    "id": "ch-007",
+    "textbookId": "tb-006",
+    "name": "Unit 2 Values",
+    "orderIndex": 2
+  },
+  {
+    "id": "ch-008",
+    "textbookId": "tb-006",
+    "name": "Unit 3 The Generation Gap",
+    "orderIndex": 3
+  }
+]

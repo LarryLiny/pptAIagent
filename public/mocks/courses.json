@@ -1,0 +1,86 @@
+[
+  {
+    "id": "course-001",
+    "textbookId": "tb-001",
+    "name": "Unit 1 Fresh Start",
+    "isOfficial": true,
+    "publishedClassCount": 2
+  },
+  {
+    "id": "course-002",
+    "textbookId": "tb-001",
+    "name": "Unit 2 Loving Parents, Loving Children",
+    "isOfficial": true,
+    "publishedClassCount": 1
+  },
+  {
+    "id": "course-003",
+    "textbookId": "tb-001",
+    "name": "Unit 3 Digital Campus",
+    "isOfficial": false,
+    "publishedClassCount": 0
+  },
+  {
+    "id": "course-004",
+    "textbookId": "tb-002",
+    "name": "第一课 基础翻译理论",
+    "isOfficial": true,
+    "publishedClassCount": 3
+  },
+  {
+    "id": "course-005",
+    "textbookId": "tb-002",
+    "name": "第二课 词汇翻译技巧",
+    "isOfficial": false,
+    "publishedClassCount": 1
+  },
+  {
+    "id": "course-006",
+    "textbookId": "tb-003",
+    "name": "Chapter 1 Banking and Finance",
+    "isOfficial": true,
+    "publishedClassCount": 4
+  },
+  {
+    "id": "course-007",
+    "textbookId": "tb-003",
+    "name": "Chapter 2 International Trade",
+    "isOfficial": true,
+    "publishedClassCount": 2
+  },
+  {
+    "id": "course-008",
+    "textbookId": "tb-003",
+    "name": "Chapter 3 Financial Markets",
+    "isOfficial": false,
+    "publishedClassCount": 0
+  },
+  {
+    "id": "course-009",
+    "textbookId": "tb-004",
+    "name": "财经英语阅读",
+    "isOfficial": true,
+    "publishedClassCount": 1
+  },
+  {
+    "id": "course-010",
+    "textbookId": "tb-006",
+    "name": "Unit 1 Ways of Learning",
+    "isOfficial": true,
+    "publishedClassCount": 3
+  },
+  {
+    "id": "course-011",
+    "textbookId": "tb-006",
+    "name": "Unit 2 Values",
+    "isOfficial": true,
+    "publishedClassCount": 2
+  },
+  {
+    "id": "course-012",
+    "textbookId": "tb-006",
+    "name": "Unit 3 The Generation Gap",
+    "isOfficial": false,
+    "publishedClassCount": 0
+  }
+]

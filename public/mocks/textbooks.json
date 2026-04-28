@@ -1,0 +1,50 @@
+[
+  {
+    "id": "tb-001",
+    "name": "新视野大学英语读写教程1",
+    "coverImage": "/imgs/textbook_cover_1.webp",
+    "coursewareCount": 3,
+    "isFavorited": true,
+    "isDelisted": false
+  },
+  {
+    "id": "tb-002",
+    "name": "汉俄翻译教程",
+    "coverImage": "/imgs/textbook_cover_2.webp",
+    "coursewareCount": 1,
+    "isFavorited": false,
+    "isDelisted": false
+  },
+  {
+    "id": "tb-003",
+    "name": "金融英语综合教程",
+    "coverImage": "/imgs/textbook_cover_3.webp",
+    "coursewareCount": 2,
+    "isFavorited": true,
+    "isDelisted": false
+  },
+  {
+    "id": "tb-004",
+    "name": "财经英语阅读",
+    "coverImage": "/imgs/textbook_cover_4.webp",
+    "coursewareCount": 0,
+    "isFavorited": false,
+    "isDelisted": true
+  },
+  {
+    "id": "tb-005",
+    "name": "汉德翻译教程",
+    "coverImage": "/imgs/textbook_cover_5.webp",
+    "coursewareCount": 0,
+    "isFavorited": false,
+    "isDelisted": true
+  },
+  {
+    "id": "tb-006",
+    "name": "大学英语综合教程2",
+    "coverImage": "/imgs/textbook_cover_6.webp",
+    "coursewareCount": 4,
+    "isFavorited": true,
+    "isDelisted": false
+  }
+]

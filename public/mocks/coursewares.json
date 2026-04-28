@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cw-001",
+    "textbookId": "tb-001",
+    "name": "Unit 1 课件",
+    "courseName": "Unit 1 Fresh Start"
+  },
+  {
+    "id": "cw-002",
+    "textbookId": "tb-001",
+    "name": "Unit 2 课件",
+    "courseName": "Unit 2 Loving Parents, Loving Children"
+  },
+  {
+    "id": "cw-003",
+    "textbookId": "tb-001",
+    "name": "Unit 3 听说训练",
+    "courseName": "Unit 3 Digital Campus"
+  },
+  {
+    "id": "cw-004",
+    "textbookId": "tb-003",
+    "name": "Banking 基础课件",
+    "courseName": "Chapter 1 Banking and Finance"
+  },
+  {
+    "id": "cw-005",
+    "textbookId": "tb-006",
+    "name": "Ways of Learning 导入课件",
+    "courseName": "Unit 1 Ways of Learning"
+  }
+]

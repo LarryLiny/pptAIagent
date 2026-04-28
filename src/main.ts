@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
+import router from './router'
 
 import 'prosemirror-view/style/prosemirror.css'
 import 'animate.css'
@@ -13,4 +14,5 @@ import Directive from '@/directive'
 const app = createApp(App)
 app.use(Directive)
 app.use(createPinia())
+app.use(router)
 app.mount('#app')
