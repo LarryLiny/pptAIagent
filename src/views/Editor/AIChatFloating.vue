@@ -56,18 +56,16 @@
         </div>
       </div>
 
-      <!-- Tool settings panel (overlay, not in flow) -->
-      <div class="tool-settings-overlay" v-if="showSettings && currentToolSettings" @click.self="showSettings = false">
-        <div class="tool-settings-panel">
-          <div class="settings-header">
-            <span class="settings-title">更多设置</span>
-            <span class="settings-close" @click="showSettings = false">×</span>
-          </div>
-          <div v-for="s in currentToolSettings" :key="s.key" class="setting-row">
-            <span class="setting-label">{{ s.label }}</span>
-            <div class="setting-opts">
-              <button v-for="o in s.options" :key="o" class="setting-opt" :class="{ active: toolSettings[s.key] === o }" @click="updateToolSetting(s.key, o)">{{ o }}</button>
-            </div>
+      <!-- Tool settings panel (positioned above tools bar) -->
+      <div class="tool-settings-panel" v-if="showSettings && currentToolSettings">
+        <div class="settings-header">
+          <span class="settings-title">更多设置</span>
+          <span class="settings-close" @click="showSettings = false">×</span>
+        </div>
+        <div v-for="s in currentToolSettings" :key="s.key" class="setting-row">
+          <span class="setting-label">{{ s.label }}</span>
+          <div class="setting-opts">
+            <button v-for="o in s.options" :key="o" class="setting-opt" :class="{ active: toolSettings[s.key] === o }" @click="updateToolSetting(s.key, o)">{{ o }}</button>
           </div>
         </div>
       </div>
@@ -906,19 +904,13 @@ onMounted(() => {
   }
 }
 
-.tool-settings-overlay {
-  position: absolute; inset: 0; z-index: 20;
-  display: flex; align-items: flex-end; justify-content: center;
-  background: rgba(0,0,0,0.08);
-  border-radius: 12px;
+.tool-settings-panel {
+  width: 100%; max-height: 200px;
+  background: #fff; border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
+  padding: 10px 14px 14px; overflow-y: auto;
+  flex-shrink: 0;
 
-  .tool-settings-panel {
-    width: 100%; max-height: 50%;
-    background: #fff; border-top: 1px solid #e5e7eb;
-    border-radius: 12px 12px 0 0;
-    box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
-    padding: 10px 14px 14px; overflow-y: auto;
-  }
   .settings-header {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 8px;
