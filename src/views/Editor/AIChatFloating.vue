@@ -740,18 +740,37 @@ function handleButton(action: string, content: string) {
   }
   else if (action === 'note') {
     // Insert content as speaker notes (备注) on the current slide
-    const currentSlide = slidesStore.currentSlide
+    const slideIndex = slidesStore.slideIndex
+    const currentSlide = slidesStore.slides[slideIndex]
     if (currentSlide) {
       // Strip markdown formatting for plain-text notes
       const noteText = content
         .replace(/^#{1,3}\s+/gm, '')
         .replace(/\*\*(.+?)\*\*/g, '$1')
         .replace(/\*(.+?)\*/g, '$1')
+        .replace(/---PPT_SLIDE---/g, '')
+        .replace(/---CONTENT_TYPE:\w+---/g, '')
         .trim()
-      const existingNotes = currentSlide.remark || ''
-      const newNotes = existingNotes ? `${existingNotes}\n\n${noteText}` : noteText
-      slidesStore.updateSlide({ remark: newNotes })
-      addHistorySnapshot()
+      if (noteText) {
+        const existingNotes = currentSlide.remark || ''
+        const newNotes = existingNotes ? `${existingNotes}\n\n${noteText}` : noteText
+        slidesStore.updateSlide({ remark: newNotes })
+        addHistorySnapshot()
+
+        // Add confirmation message in chat
+        const session = getActiveSession()
+        if (session) {
+          session.messages.push({
+            id: Date.now().toString() + Math.random().toString(36).slice(2),
+            type: 'ai',
+            content: '已插入到当前页备注中。可在画布下方的备注区域查看。',
+            timestamp: new Date(),
+            _btnsVisible: true,
+          })
+          saveSessions()
+          scrollToBottom()
+        }
+      }
     }
   }
 }
