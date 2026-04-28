@@ -17,7 +17,10 @@
 - **TextbookDetailPage**: 教材详情页，包含教程管理和课件管理两个 tab
 - **CourseManagementTab**: 教程管理 tab，以表格形式展示教材下的教程列表
 - **CoursewareManagementTab**: 课件管理 tab，以表格形式展示课件列表，支持上传和新建在线课件
-- **CoursewareGenerator**: 课件生成功能，选择教材章节后通过 AI 生成在线课件
+- **CoursewareGenerator**: 课件生成功能，选择教材章节后获取或生成在线课件
+- **iPub**: 外研社数字出版平台（iPublish），教研人员在此平台将数字教材转为课件并上架
+- **上架课件**: 教研人员在 iPub 平台将数字教材转为课件、美化后"上架"的课件，与特定教材的特定章节绑定
+- **教师课件**: 从上架课件复制或自动生成的课件副本，归属于特定教师 + 特定教材 + 特定章节，教师可自由编辑，不影响原始上架课件
 - **MockDataService**: Mock 数据服务，提供教材、教程、课件等模拟数据
 - **PPTistEditor**: 现有的 PPTist 幻灯片编辑器，用于编辑在线课件
 
@@ -112,16 +115,28 @@
 
 ### Requirement 8: 新建在线课件流程
 
-**User Story:** As a 教师, I want to 通过选择教材章节来生成在线课件, so that 我可以快速基于教材内容创建课件。
+**User Story:** As a 教师, I want to 通过选择教材章节来获取或生成在线课件, so that 我可以快速基于教材内容创建属于自己的课件并进行二次编辑。
+
+#### 课件来源业务规则
+
+课件按章生成（每章一个课件，不是整本书），来源分两种情况：
+
+1. **有上架课件的章节**：教研人员在 iPub 平台将数字教材转为课件并美化后"上架"，上架课件与该教材的该章节绑定。当教师选择该章节生成课件时，系统从已上架的课件复制一份副本给教师。
+2. **无上架课件的章节**：如果该章节在 iPub 上没有已上架的课件，系统自动根据该章的数字教材内容生成一份课件给教师。
+
+无论哪种来源，生成的课件都是教师的私有副本（绑定：教师 + 教材 + 章节），教师可以自由编辑修改，不会影响 iPub 上教研人员上架的原始课件。
 
 #### Acceptance Criteria
 
 1. WHEN the user clicks "新建在线课件" button, THE CoursewareGenerator SHALL display a modal dialog for selecting a textbook chapter
 2. THE CoursewareGenerator SHALL display the textbook's chapter list for the user to select from
-3. WHEN the user selects a chapter and clicks the "生成" button, THE CoursewareGenerator SHALL create a new courseware entry associated with the selected chapter
-4. WHEN courseware generation completes, THE CoursewareManagementTab SHALL add the new courseware to the table and provide "编辑" and "预览" action buttons
-5. WHEN the user clicks "编辑" on a courseware entry, THE App SHALL navigate to the PPTistEditor with the corresponding courseware data loaded
-6. WHEN the user clicks "预览" on a courseware entry, THE App SHALL open a preview of the courseware content
+3. WHEN the user selects a chapter and clicks the "生成" button, THE CoursewareGenerator SHALL check whether the selected chapter has a published (上架) courseware on iPub
+4. WHILE the selected chapter has a published courseware on iPub, THE CoursewareGenerator SHALL create a copy of the published courseware as the teacher's private courseware
+5. WHILE the selected chapter does NOT have a published courseware on iPub, THE CoursewareGenerator SHALL automatically generate a new courseware from the chapter's digital textbook content
+6. THE generated courseware SHALL be bound to the specific teacher, textbook, and chapter, and SHALL be independently editable without affecting the original published courseware on iPub
+7. WHEN courseware generation completes, THE CoursewareManagementTab SHALL add the new courseware to the table and provide "编辑" and "预览" action buttons
+8. WHEN the user clicks "编辑" on a courseware entry, THE App SHALL navigate to the PPTistEditor with the corresponding courseware data loaded
+9. WHEN the user clicks "预览" on a courseware entry, THE App SHALL open a preview of the courseware content
 
 ### Requirement 9: Mock 数据服务
 
