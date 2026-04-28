@@ -56,22 +56,20 @@
         </div>
       </div>
 
-      <!-- Tool settings panel (positioned above tools bar) -->
-      <div class="tool-settings-panel" v-if="showSettings && currentToolSettings">
-        <div class="settings-header">
-          <span class="settings-title">更多设置</span>
-          <span class="settings-close" @click="showSettings = false">×</span>
-        </div>
-        <div v-for="s in currentToolSettings" :key="s.key" class="setting-row">
-          <span class="setting-label">{{ s.label }}</span>
-          <div class="setting-opts">
-            <button v-for="o in s.options" :key="o" class="setting-opt" :class="{ active: toolSettings[s.key] === o }" @click="updateToolSetting(s.key, o)">{{ o }}</button>
-          </div>
-        </div>
-      </div>
-
       <!-- Tools bar -->
       <div class="float-tools">
+        <div class="tool-settings-panel" v-if="showSettings && currentToolSettings">
+          <div class="settings-header">
+            <span class="settings-title">更多设置</span>
+            <span class="settings-close" @click="showSettings = false">×</span>
+          </div>
+          <div v-for="s in currentToolSettings" :key="s.key" class="setting-row">
+            <span class="setting-label">{{ s.label }}</span>
+            <div class="setting-opts">
+              <button v-for="o in s.options" :key="o" class="setting-opt" :class="{ active: toolSettings[s.key] === o }" @click="updateToolSetting(s.key, o)">{{ o }}</button>
+            </div>
+          </div>
+        </div>
         <div class="tool-dropdown-wrap" @mouseenter="openToolMenu" @mouseleave="closeToolMenuDelay">
           <button class="tool-chip">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
@@ -905,11 +903,12 @@ onMounted(() => {
 }
 
 .tool-settings-panel {
-  width: 100%; max-height: 200px;
+  position: absolute; bottom: 100%; left: 0; right: 0;
+  z-index: 20;
   background: #fff; border-top: 1px solid #e5e7eb;
   box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
   padding: 10px 14px 14px; overflow-y: auto;
-  flex-shrink: 0;
+  max-height: 200px;
 
   .settings-header {
     display: flex; justify-content: space-between; align-items: center;
@@ -933,6 +932,7 @@ onMounted(() => {
 }
 
 .float-tools {
+  position: relative;
   display: flex; align-items: center; gap: 6px;
   padding: 6px 14px; border-top: 1px solid #f0f0f0;
   flex-shrink: 0;
